@@ -22,9 +22,10 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
-from abe import genEncryptionKey
+from abe import genEncryptionKey, encrypt
 import base64
 import socketio
+import json
 from ecdsa import VerifyingKey, BadSignatureError
 import hashlib
 # Initialize SocketIO client
@@ -1172,6 +1173,7 @@ def submit_registration(reg_window, patient_id_entry, date_entry, age_entry, hea
         del registration_details["Symptoms"]
         del registration_details["Diagnosis"]
         json_string = json.dumps(registration_details)
+        print("json", json_string)
 
     messagebox.showinfo("Registration Info", str(registration_details))
     reg_window.destroy()
