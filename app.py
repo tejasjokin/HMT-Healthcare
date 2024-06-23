@@ -51,7 +51,7 @@ def handle_consent(data):
             'Signature': Signature,
             'DoctorID': DoctorID 
         })
-    print("Consent emitted to tkinter")
+    print("Consent emitted to tkinter", Consent, Signature, DoctorID)
 
 
 @app.route('/')

@@ -16,6 +16,9 @@ from mysql.connector import Error
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
+import binascii
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
 from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
@@ -131,13 +134,6 @@ def open_anomization_window(registration_details):
     cc1 = cc.split()
     print('Diagnosis:',cc1[1],cc1[-1])
     print('Medicines:',registration_details['Medicines'])
-
-
-
-
-
-
-
 
 
 def open_encryption_window(registration_details):
@@ -434,6 +430,12 @@ def generate_rsa_key_pair():
         format=serialization.PublicFormat.OpenSSH
     ).decode('utf-8')
 
+    # Get the public key in PEM format
+    public_key_pem = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    ).decode('utf-8')
+
     # Serialize the private key to PEM format for storage (password protected or not)
     private_key_pem = private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
@@ -441,7 +443,7 @@ def generate_rsa_key_pair():
         encryption_algorithm=serialization.NoEncryption()
     ).decode('utf-8')
 
-    return public_key, private_key_pem
+    return public_key,public_key_pem, private_key_pem
 
 
 # Initialize pairing group
@@ -544,7 +546,7 @@ def submit_doctor_info():
     years_experience = years_experience_entry.get()
     organization = organization_entry.get()
     if doctor_id and department and specialist and years_experience and organization:
-        pub_key, priv_key = generate_rsa_key_pair()
+        pub_key, pub_key_pem, priv_key = generate_rsa_key_pair()
 
         # Send OTP via email
         email = email_entry.get()
@@ -572,7 +574,7 @@ def submit_doctor_info():
                     keys_window.title("Generated Keys")
                     keys_window.geometry("500x300")  # Set the size of the keys window
 
-                    keys_text = f"Public Key:\n{pub_key}\n\nPrivate Key:\n{priv_key}"
+                    keys_text = f"Public Key:\n{pub_key}\n\nPrivate Key:\n{priv_key}\n\nPublic Key (PEM Format):\n{pub_key_pem}"
                     keys_text_widget = scrolledtext.ScrolledText(keys_window, width=60, height=10)
                     keys_text_widget.insert(tk.END, keys_text)
                     keys_text_widget.pack(pady=10)
@@ -695,7 +697,7 @@ def submit_patient_info():
     patient_name = patient_name_entry.get()
     selected_level = level_var.get()
     if selected_level and patient_name:
-        pub_key, priv_key = generate_rsa_key_pair()
+        pub_key, pub_key_pem, priv_key = generate_rsa_key_pair()
 
         # Send OTP via email
         email = email_entry.get()
@@ -722,7 +724,7 @@ def submit_patient_info():
                     keys_window = tk.Toplevel()
                     keys_window.title("Generated Keys")
 
-                    keys_text = f"Public Key:\n{pub_key}\n\nPrivate Key:\n{priv_key}"
+                    keys_text = f"Public Key:\n{pub_key}\n\nPrivate Key:\n{priv_key}\n\nPublic Key (PEM Format):\n{pub_key_pem}"
                     keys_text_widget = scrolledtext.ScrolledText(keys_window, width=60, height=10)
                     keys_text_widget.insert(tk.END, keys_text)
                     keys_text_widget.pack(pady=10)
@@ -801,41 +803,77 @@ def enrollment():
     patient_button = tk.Button(choice_window, text="Patient", command=lambda: [ask_patient_info(), choice_window.destroy()])
     patient_button.pack(side="right", padx=10)
 
+def verify_signature(public_key_pem, data, signature):
+    try:
+        # Load the public key from PEM format
+        print(public_key_pem, "public key pem", data, "data", signature, "signature")
+        public_key = serialization.load_pem_public_key(
+            public_key_pem.encode(),
+            backend=default_backend()
+        )
+        # Ensure data is encoded as bytes (consistent with signing process)
+        data_bytes = data.encode('utf-8')
+
+        # Hash the data using SHA-256
+        hasher = hashes.Hash(hashes.SHA256(), backend=default_backend())
+        hasher.update(data_bytes)
+        digest = hasher.finalize()
+
+        # Verify the signature
+        public_key.verify(
+            signature,
+            digest,
+            padding.PKCS1v15(),
+            hashes.SHA256()
+        )
+
+        # If verification succeeds, return True and the digest
+        return True, digest
+
+    except Exception as e:
+        # Print the error if verification fails
+        print("Signature verification failed:", e)
+        return False, None
 
 @socket.on('send_consent_tkinter')
 def handle_consent_received(data):
     received_consent = data.get('Consent')
     signature = data.get('Signature')
     doctorID = data.get('DoctorID')
-    pub_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDEk6E6SDC5QvUvrq88Tf2YvIK00WGgx5AKjHtm/XFmUSL9MoUY+y55EpAJVjgwElqX/lgpf+cFJa0c+oYnNW5tAu5w8CT6NPFciZM4aGiS3oZ7MbCrkMCetvpHloWd1isT+a0Fl7tlOFPiHUJaAKqGCcMNmA9acqcGhKdJN2ERsX6sCSZDUolZSuvFfN5wq9GBNxYBRNmRSd5wMa8p/vggbZc9w0LdlpQIVNe7r09sWTCJUK1ID2lHrQ4/GVbC9E4QfZEA8TCQjQxpSFjgBeIGRztMHGL+YD/ieRLvREFq1CzC1eQj4bfrfCOJoXyKDt1nShIX+L6BHwewuyWtQHO5"  # Assuming you receive the public key from the client
+    verified_consent = ""
+    pub_key_pem = """
+-----BEGIN RSA PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAp9pOy4wbOyBLXqzJ3ZyU
+d7zCXoQykS2Yf9eA9SA5Gwc1FrjnWwfGo8LK5taT+OpATdHGmh/xIPnjQvoIpTgK
+lKpDEpaN5O0cIpmEIqxbeeeoNyrr0wb1dVLvsrmwCxN6y/LauG2rCGipSzLSUj7Q
+OMj0GoWLs/d+kRJdZo0z9gqWFwSaDrJbptAAsM5rvl9yNeMAvOebcxULySqkL3Nz
+MArwP2uFyLJkYnvQVyvwUkvmyOHY1JE7xqoZdjsHMFI9eIgDJXvrLUMcfOQak8yQ
+fU0eVYeTdPgf06meZszWpSZ22AM9SOAjFkEgP6LcsPHlmTWAmJ/KpC2womN5ippK
+EwIDAQAB
+-----END RSA PUBLIC KEY-----
+"""
+    signature_bytes = base64.b64decode(signature)
+    print("Received Consent:", received_consent, "Doctor ID:", doctorID, "Signature:", signature_bytes)
+    verification_result, digest = verify_signature(pub_key_pem, received_consent, signature_bytes)
+    
+    if verification_result:
+    # Hash the original data separately
+        hasher_data = hashes.Hash(hashes.SHA256(), backend=default_backend())
+        hasher_data.update(received_consent.encode('utf-8'))
+        original_hash = hasher_data.finalize()
 
-    if received_consent and signature and doctorID and pub_key:
-        print("Consent received:", received_consent)
-        print("Signature received:", signature)
-        print("Doctor ID:", doctorID)
-        print("Public Key:", pub_key)
+        # Compare hashes
+        if digest == original_hash:
+            verified_consent = received_consent
+            if( verified_consent == "yes"):
+               # macho wala function with doctorID
+               print("Consent provided by patient.")
+               add_new_health_record(doctorID)
+            elif( verified_consent == "no"):  
+                messagebox.showerror("Consent Result", "Consent not provided by patient.")           
+        else:
+           messagebox.showerror("Verification Result", "Signature verification failed.")
 
-        # Assuming received_consent is already hashed (e.g., SHA-256)
-        hashed_consent = received_consent.encode('utf-8')  # Assuming consent is in string format
-        try:
-            # Verify the ECDSA signature
-            verifying_key = VerifyingKey.from_pem(pub_key.encode('utf-8'))
-            verifying_key.verify(signature.encode('utf-8'), hashed_consent)
-            print("Signature verified successfully.")
-            # Process further based on successful verification
-
-            # Example: Show a message box or emit an event back to tkinter
-            messagebox.showinfo("Consent Received", f"Consent: {received_consent}")
-
-        except BadSignatureError:
-            print("Signature verification failed. Consent may have been tampered.")
-            # Handle the case where signature verification fails
-            messagebox.showerror("Consent Error", "Consent verification failed. Please contact support.")
-
-    else:
-        print("Incomplete data received.")
-        # Handle the case where expected data is missing or incomplete
-        messagebox.showerror("Data Error", "Incomplete data received. Please try again.")
 
 # Function to connect SocketIO client to server
 def connect_to_server():
@@ -871,7 +909,7 @@ def ask_patient_consent():
         email = email_entry.get()
         doctor_id = doctor_id_entry.get()
         date = date_entry.get()
-        link = 'http://localhost:8082/'
+        link = 'http://localhost:8080/'
         if email and doctor_id and date:
             if not socket.connected:
                 connect_to_server()
@@ -1083,12 +1121,12 @@ def open_registration_window(new_user):
 
     submit_button = tk.Button(reg_window, text="Submit", command=lambda: submit_registration(
         reg_window, patient_id_entry, date_entry, age_entry, heart_rate_entry,
-        bp_entry, weight_entry, height_entry, symptoms_entry, diagnosis_entry, medicines_entry
+        bp_entry, weight_entry, height_entry, symptoms_entry, diagnosis_entry, medicines_entry,"1234"
     ))
     submit_button.pack(pady=20)
 
 def submit_registration(reg_window, patient_id_entry, date_entry, age_entry, heart_rate_entry,
-                        bp_entry, weight_entry, height_entry, symptoms_entry, diagnosis_entry, medicines_entry):
+                        bp_entry, weight_entry, height_entry, symptoms_entry, diagnosis_entry, medicines_entry, doctor_id):
     """
     Handle registration submission.
     """
@@ -1115,9 +1153,102 @@ def submit_registration(reg_window, patient_id_entry, date_entry, age_entry, hea
         "Diagnosis": diagnosis,
         "Medicines": medicines
     }
+    
+    column_names = ('id', 'doctor_id','email','department','specialist','years_experience','organization','abe_secret_key','public_key')
+    doctor = get_doctor_info(doctor_id)
+    if doctor:
+        doctor_dict = dict(zip(column_names, doctor))
+        abe_secret_key = doctor_dict['abe_secret_key']
+        sk = base64.b64decode(abe_secret_key)
+        sensitive_attributes = ["Symptoms", "Diagnosis"]
+        registration_details["SensitiveData"] = []
+        for attribute in sensitive_attributes:
+            encrypt_details = {}
+            encrypt_details["attribute_name"] = attribute
+            encryption, tag = encrypt(registration_details[attribute], sk)
+            encrypt_details["ciphertext"] = base64.b64encode(encryption).decode()
+            encrypt_details["tag"] = base64.b64encode(encryption).decode()
+            registration_details["SensitiveData"].append(encrypt_details)
+        del registration_details["Symptoms"]
+        del registration_details["Diagnosis"]
+        json_string = json.dumps(registration_details)
 
     messagebox.showinfo("Registration Info", str(registration_details))
     reg_window.destroy()
+    
+def get_doctor_info(doctor_id):
+    db_connection = get_database_connection()
+    if not db_connection:
+        return
+    try:
+        cursor = db_connection.cursor()
+
+        # Create doctors table if not exists
+        cursor.execute("SELECT * FROM doctors WHERE doctor_id = %s", (doctor_id,))
+        doctor = cursor.fetchone()
+        # Close cursor and connection
+        cursor.close()
+        db_connection.close()
+        
+        return doctor
+
+    except Error as e:
+        print(f"Error fetching doctor information: {e}")
+        messagebox.showerror("Database Error", "Failed to fetch doctor information.")
+        
+def add_new_health_record(doctor_id: str):
+    """
+    Add new health record window.
+    """
+    reg_window = tk.Toplevel(root)
+    reg_window.title("Add New Health Record")
+
+    tk.Label(reg_window, text="Patient ID").pack(pady=5)
+    patient_id_entry = tk.Entry(reg_window)
+    patient_id_entry.pack(pady=5)
+
+    tk.Label(reg_window, text="Date").pack(pady=5)
+    date_entry = tk.Entry(reg_window)
+    date_entry.pack(pady=5)
+    date_entry.insert(0, datetime.now().strftime("%Y-%m-%d"))
+
+    tk.Label(reg_window, text="Age").pack(pady=5)
+    age_entry = tk.Entry(reg_window)
+    age_entry.pack(pady=5)
+
+    tk.Label(reg_window, text="Heart Rate").pack(pady=5)
+    heart_rate_entry = tk.Entry(reg_window)
+    heart_rate_entry.pack(pady=5)
+
+    tk.Label(reg_window, text="Blood Pressure").pack(pady=5)
+    bp_entry = tk.Entry(reg_window)
+    bp_entry.pack(pady=5)
+
+    tk.Label(reg_window, text="Weight").pack(pady=5)
+    weight_entry = tk.Entry(reg_window)
+    weight_entry.pack(pady=5)
+
+    tk.Label(reg_window, text="Height").pack(pady=5)
+    height_entry = tk.Entry(reg_window)
+    height_entry.pack(pady=5)
+
+    tk.Label(reg_window, text="Symptoms").pack(pady=5)
+    symptoms_entry = tk.Entry(reg_window)
+    symptoms_entry.pack(pady=5)
+
+    tk.Label(reg_window, text="Diagnosis").pack(pady=5)
+    diagnosis_entry = tk.Entry(reg_window)
+    diagnosis_entry.pack(pady=5)
+
+    tk.Label(reg_window, text="Medicines").pack(pady=5)
+    medicines_entry = tk.Entry(reg_window)
+    medicines_entry.pack(pady=5)
+    
+    submit_button = tk.Button(reg_window, text="Submit", command=lambda: submit_registration(
+        reg_window, patient_id_entry, date_entry, age_entry, heart_rate_entry,
+        bp_entry, weight_entry, height_entry, symptoms_entry, diagnosis_entry, medicines_entry,doctor_id
+    ))
+    submit_button.pack(pady=20)
 
 root = tk.Tk()
 root.title("ABE privacy preservation")
