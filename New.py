@@ -488,7 +488,7 @@ def get_database_connection():
         return None
 
 
-def store_doctor_info(doctor_id, email, department, specialist, years_experience, organization, public_key, abe_secret_key):
+def store_doctor_info(doctor_id, email, department, specialist, years_experience, organization, public_key, public_key_pem, abe_secret_key):
     db_connection = get_database_connection()
     if not db_connection:
         return
@@ -506,7 +506,8 @@ def store_doctor_info(doctor_id, email, department, specialist, years_experience
                 years_experience INT,
                 organization VARCHAR(100),
                 abe_secret_key TEXT,
-                public_key TEXT
+                public_key TEXT,
+                public_key_pem TEXT
             )
         """)
 
@@ -519,10 +520,10 @@ def store_doctor_info(doctor_id, email, department, specialist, years_experience
 
         # Insert doctor info into table
         sql = """
-            INSERT INTO doctors (doctor_id,email, department, specialist, years_experience, organization, public_key, abe_secret_key)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO doctors (doctor_id,email, department, specialist, years_experience, organization, public_key,public_key_pem, abe_secret_key)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
-        values = (doctor_id, email, department, specialist, years_experience, organization, public_key, abe_secret_key)
+        values = (doctor_id, email, department, specialist, years_experience, organization, public_key, public_key_pem, abe_secret_key)
         cursor.execute(sql, values)
 
         # Commit changes
@@ -547,7 +548,7 @@ def submit_doctor_info():
     years_experience = years_experience_entry.get()
     organization = organization_entry.get()
     if doctor_id and department and specialist and years_experience and organization:
-        pub_key, pub_key_pem, priv_key = generate_rsa_key_pair()
+        pub_key, public_key_pem, priv_key = generate_rsa_key_pair()
 
         # Send OTP via email
         email = email_entry.get()
@@ -575,7 +576,7 @@ def submit_doctor_info():
                     keys_window.title("Generated Keys")
                     keys_window.geometry("500x300")  # Set the size of the keys window
 
-                    keys_text = f"Public Key:\n{pub_key}\n\nPrivate Key:\n{priv_key}\n\nPublic Key (PEM Format):\n{pub_key_pem}"
+                    keys_text = f"Public Key:\n{pub_key}\n\nPrivate Key:\n{priv_key}\n\nPublic Key (PEM Format):\n{public_key_pem}"
                     keys_text_widget = scrolledtext.ScrolledText(keys_window, width=60, height=10)
                     keys_text_widget.insert(tk.END, keys_text)
                     keys_text_widget.pack(pady=10)
@@ -591,7 +592,7 @@ def submit_doctor_info():
                     def close_keys_window():
                         keys_window.destroy()
                         abe_secret_key = genEncryptionKey([years_experience, organization])
-                        store_doctor_info(doctor_id, email, department, specialist, years_experience, organization, pub_key, base64.b64encode(abe_secret_key).decode())
+                        store_doctor_info(doctor_id, email, department, specialist, years_experience, organization, pub_key, public_key_pem, base64.b64encode(abe_secret_key).decode())
                         reg_window.destroy()
 
                     ok_button = tk.Button(keys_window, text="OK", command=close_keys_window)
@@ -645,7 +646,7 @@ def ask_doctor_info():
     submit_button = tk.Button(reg_window, text="Submit", command=submit_doctor_info)
     submit_button.pack(pady=10)
 
-def store_patient_info(patient_name,email, selected_level, public_key):
+def store_patient_info(patient_name,email, selected_level, public_key, public_key_pem):
     db_connection = get_database_connection()
     if not db_connection:
         return
@@ -660,6 +661,7 @@ def store_patient_info(patient_name,email, selected_level, public_key):
                 email VARCHAR(255) UNIQUE,
                 level VARCHAR(10),
                 public_key TEXT,
+                public_key_pem TEXT,
                 UNIQUE(patient_name)
             )
         """)
@@ -673,10 +675,10 @@ def store_patient_info(patient_name,email, selected_level, public_key):
 
         # Insert patient info into table
         sql = """
-            INSERT INTO patients (patient_name, email, level, public_key)
-            VALUES (%s,%s, %s, %s)
+            INSERT INTO patients (patient_name, email, level, public_key, public_key_pem)
+            VALUES (%s,%s, %s, %s, %s)
         """
-        values = (patient_name,email, selected_level, public_key)
+        values = (patient_name,email, selected_level, public_key, public_key_pem)
         cursor.execute(sql, values)
 
         # Commit changes
@@ -698,7 +700,7 @@ def submit_patient_info():
     patient_name = patient_name_entry.get()
     selected_level = level_var.get()
     if selected_level and patient_name:
-        pub_key, pub_key_pem, priv_key = generate_rsa_key_pair()
+        pub_key, public_key_pem, priv_key = generate_rsa_key_pair()
 
         # Send OTP via email
         email = email_entry.get()
@@ -725,7 +727,7 @@ def submit_patient_info():
                     keys_window = tk.Toplevel()
                     keys_window.title("Generated Keys")
 
-                    keys_text = f"Public Key:\n{pub_key}\n\nPrivate Key:\n{priv_key}\n\nPublic Key (PEM Format):\n{pub_key_pem}"
+                    keys_text = f"Public Key:\n{pub_key}\n\nPrivate Key:\n{priv_key}\n\nPublic Key (PEM Format):\n{public_key_pem}"
                     keys_text_widget = scrolledtext.ScrolledText(keys_window, width=60, height=10)
                     keys_text_widget.insert(tk.END, keys_text)
                     keys_text_widget.pack(pady=10)
@@ -740,7 +742,7 @@ def submit_patient_info():
 
                     def close_keys_window():
                         keys_window.destroy()
-                        store_patient_info(patient_name, email, selected_level, pub_key)
+                        store_patient_info(patient_name, email, selected_level, pub_key, public_key_pem)
                         reg_window.destroy()
 
                     ok_button = tk.Button(keys_window, text="OK", command=close_keys_window)
@@ -836,23 +838,40 @@ def verify_signature(public_key_pem, data, signature):
         print("Signature verification failed:", e)
         return False, None
 
+
+
+def get_public_key_pem_from_db(email):
+    db_connection = get_database_connection()
+    if not db_connection:
+        return
+    try:
+        cursor = db_connection.cursor()
+
+        cursor.execute("SELECT public_key_pem FROM patients WHERE email = %s", ("harshikasmishra@gmail.com",))
+        result = cursor.fetchone()
+        if result:
+            public_key_pem = result[0]  # Access the first element of the tuple
+            print("Public Key PEM fetched from database:", public_key_pem)
+            cursor.close()
+            db_connection.close()
+            return public_key_pem
+        else:
+            print(f"No public key PEM found for email: {email}")
+            return None
+
+    except mysql.connector.Error as e:
+        print(f"Error fetching public key PEM from database: {e}")
+        return None
+    
 @socket.on('send_consent_tkinter')
 def handle_consent_received(data):
     received_consent = data.get('Consent')
     signature = data.get('Signature')
     doctorID = data.get('DoctorID')
+    email = data.get('email')
     verified_consent = ""
-    pub_key_pem = """
------BEGIN RSA PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAp9pOy4wbOyBLXqzJ3ZyU
-d7zCXoQykS2Yf9eA9SA5Gwc1FrjnWwfGo8LK5taT+OpATdHGmh/xIPnjQvoIpTgK
-lKpDEpaN5O0cIpmEIqxbeeeoNyrr0wb1dVLvsrmwCxN6y/LauG2rCGipSzLSUj7Q
-OMj0GoWLs/d+kRJdZo0z9gqWFwSaDrJbptAAsM5rvl9yNeMAvOebcxULySqkL3Nz
-MArwP2uFyLJkYnvQVyvwUkvmyOHY1JE7xqoZdjsHMFI9eIgDJXvrLUMcfOQak8yQ
-fU0eVYeTdPgf06meZszWpSZ22AM9SOAjFkEgP6LcsPHlmTWAmJ/KpC2womN5ippK
-EwIDAQAB
------END RSA PUBLIC KEY-----
-"""
+    pub_key_pem = get_public_key_pem_from_db(email)
+    print("Public Key PEM:", pub_key_pem, email)
     signature_bytes = base64.b64decode(signature)
     print("Received Consent:", received_consent, "Doctor ID:", doctorID, "Signature:", signature_bytes)
     verification_result, digest = verify_signature(pub_key_pem, received_consent, signature_bytes)

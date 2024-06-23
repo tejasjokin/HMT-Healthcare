@@ -26,7 +26,7 @@ def handle_consent_request(data):
             # Emit patient details to Vue.js frontend
         time.sleep(1)
         socketio.emit('patient_details', {
-            'patient_email': email,
+            'email': email,
             'doctor_id': doctor_id,
             'date': date
         })
@@ -39,6 +39,7 @@ Consent = None
 @socketio.on('send consent')
 def handle_consent(data):
     global Consent
+    email = data.get('email')
     Consent = data.get('Consent')
     Signature = data.get('Signature')
     DoctorID = data.get('DoctorID')
@@ -47,11 +48,12 @@ def handle_consent(data):
     # Example: emit an acknowledgment
     emit('consent received', {'message': 'Consent received on server'})
     socketio.emit('send_consent_tkinter', {
+            'email': email,
             'Consent': Consent,
             'Signature': Signature,
             'DoctorID': DoctorID 
         })
-    print("Consent emitted to tkinter", Consent, Signature, DoctorID)
+    print("Consent emitted to tkinter", email, Consent, Signature, DoctorID)
 
 
 @app.route('/')
