@@ -56,6 +56,32 @@ def handle_consent(data):
     print("Consent emitted to tkinter", email, Consent, Signature, DoctorID)
 
 
+@socketio.on('request_patient_key')
+def handle_key_request(data):
+    key = data.get('key')
+    if key:
+        print("requesting key")
+            # Emit patient details to Vue.js frontend
+        time.sleep(1)
+        socketio.emit('key_details', {
+            'key': key
+        })
+        print("Key request emitted to frontend")
+    else:
+        emit('key_received', {'message': 'Invalid request'})
+
+@socketio.on('submit_key')
+def handle_key(data):
+    key = data.get('key')
+    # Process encrypted consent here (example: print it)
+    print(f"Key received: {key}")
+    # Example: emit an acknowledgment
+    emit('key received', {'message': 'Key received on server'})
+    socketio.emit('send_key_tkinter', {
+            'key': key
+        })
+    print("Key emitted to tkinter", key)
+
 @app.route('/')
 def index():
     return render_template('index.html')
