@@ -421,7 +421,7 @@ def generate_rsa_key_pair():
     # Generate a new RSA key pair
     private_key = rsa.generate_private_key(
         public_exponent=65537,  # Commonly used public exponent
-        key_size=2048,  # Key size in bits
+        key_size=4096,  # Key size in bits
         backend=default_backend()
     )
 
@@ -850,8 +850,7 @@ def get_public_key_pem_from_db(email):
         cursor.execute("SELECT public_key_pem FROM patients WHERE email = %s", ("harshikasmishra@gmail.com",))
         result = cursor.fetchone()
         if result:
-            public_key_pem = result[0]  # Access the first element of the tuple
-            print("Public Key PEM fetched from database:", public_key_pem)
+            public_key_pem = result[0] 
             cursor.close()
             db_connection.close()
             return public_key_pem
@@ -871,9 +870,7 @@ def handle_consent_received(data):
     email = data.get('email')
     verified_consent = ""
     pub_key_pem = get_public_key_pem_from_db(email)
-    print("Public Key PEM:", pub_key_pem, email)
     signature_bytes = base64.b64decode(signature)
-    print("Received Consent:", received_consent, "Doctor ID:", doctorID, "Signature:", signature_bytes)
     verification_result, digest = verify_signature(pub_key_pem, received_consent, signature_bytes)
     
     if verification_result:
@@ -886,8 +883,6 @@ def handle_consent_received(data):
         if digest == original_hash:
             verified_consent = received_consent
             if( verified_consent == "yes"):
-               # macho wala function with doctorID
-               print("Consent provided by patient.")
                add_new_health_record(doctorID)
             elif( verified_consent == "no"):  
                 messagebox.showerror("Consent Result", "Consent not provided by patient.")           
