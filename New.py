@@ -1264,7 +1264,7 @@ def open_registration_window(new_user):
     ))
     submit_button.pack(pady=20)
 
-def input_doctor_private_key(registraton_details, email, doctor_id):
+def input_doctor_private_key(registraton_details, email, doctor_id, add_new_health_record_window):
     """
     Accepts doctor's private key for signing patient health record
     """
@@ -1293,9 +1293,10 @@ def input_doctor_private_key(registraton_details, email, doctor_id):
         block_json_string = json.dumps(block_data)
         chain.mineBlock(block_json_string)
         chain.printBlockchain()
-    
+        add_new_health_record_window.destroy()
         reg_window.destroy()
-    
+
+
     submit_button = tk.Button(reg_window, text="Submit", command=lambda: gatherDoctorPrivateKey(registraton_details))
     submit_button.pack(pady=20)
 
@@ -1348,7 +1349,7 @@ def submit_registration(reg_window, patient_id_entry, date_entry, age_entry, hea
             registration_details["SensitiveData"].append(encrypt_details)
         del registration_details["Symptoms"]
         del registration_details["Diagnosis"]
-        input_doctor_private_key(registration_details, email, doctor_id)
+        input_doctor_private_key(registration_details, email, doctor_id, reg_window)
 
     messagebox.showinfo("Registration Info", str(registration_details, base64.b64encode(encryption).decode()))
     reg_window.destroy()
@@ -1380,57 +1381,82 @@ def add_new_health_record(doctor_id: str, email: str):
     reg_window = tk.Toplevel(root)
     reg_window.title("Add New Health Record")
 
-    tk.Label(reg_window, text="Patient ID").pack(pady=5)
-    patient_id_entry = tk.Entry(reg_window)
+    # Create a frame for the canvas and scrollbar
+    container = tk.Frame(reg_window)
+    container.pack(fill="both", expand=True)
+
+    # Create a canvas
+    canvas = tk.Canvas(container)
+    canvas.pack(side="left", fill="both", expand=True)
+
+    # Add a scrollbar to the canvas
+    scrollbar = tk.Scrollbar(container, orient="vertical", command=canvas.yview)
+    scrollbar.pack(side="right", fill="y")
+
+    # Configure the canvas
+    canvas.configure(yscrollcommand=scrollbar.set)
+    canvas.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+    # Create a frame inside the canvas
+    form_frame = tk.Frame(canvas)
+    canvas.create_window((0, 0), window=form_frame, anchor="nw")
+
+    # Add form widgets to the frame
+    tk.Label(form_frame, text="Patient ID").pack(pady=5)
+    patient_id_entry = tk.Entry(form_frame)
     patient_id_entry.pack(pady=5)
 
-    tk.Label(reg_window, text="Date").pack(pady=5)
-    date_entry = tk.Entry(reg_window)
+    tk.Label(form_frame, text="Date").pack(pady=5)
+    date_entry = tk.Entry(form_frame)
     date_entry.pack(pady=5)
     date_entry.insert(0, datetime.now().strftime("%Y-%m-%d"))
 
-    tk.Label(reg_window, text="Age").pack(pady=5)
-    age_entry = tk.Entry(reg_window)
+    tk.Label(form_frame, text="Age").pack(pady=5)
+    age_entry = tk.Entry(form_frame)
     age_entry.pack(pady=5)
 
-    tk.Label(reg_window, text="Heart Rate").pack(pady=5)
-    heart_rate_entry = tk.Entry(reg_window)
+    tk.Label(form_frame, text="Heart Rate").pack(pady=5)
+    heart_rate_entry = tk.Entry(form_frame)
     heart_rate_entry.pack(pady=5)
 
-    tk.Label(reg_window, text="Blood Pressure").pack(pady=5)
-    bp_entry = tk.Entry(reg_window)
+    tk.Label(form_frame, text="Blood Pressure").pack(pady=5)
+    bp_entry = tk.Entry(form_frame)
     bp_entry.pack(pady=5)
 
-    tk.Label(reg_window, text="Weight").pack(pady=5)
-    weight_entry = tk.Entry(reg_window)
+    tk.Label(form_frame, text="Weight").pack(pady=5)
+    weight_entry = tk.Entry(form_frame)
     weight_entry.pack(pady=5)
 
-    tk.Label(reg_window, text="Height").pack(pady=5)
-    height_entry = tk.Entry(reg_window)
+    tk.Label(form_frame, text="Height").pack(pady=5)
+    height_entry = tk.Entry(form_frame)
     height_entry.pack(pady=5)
 
-    tk.Label(reg_window, text="Symptoms").pack(pady=5)
-    symptoms_entry = tk.Entry(reg_window)
+    tk.Label(form_frame, text="Symptoms").pack(pady=5)
+    symptoms_entry = tk.Entry(form_frame)
     symptoms_entry.pack(pady=5)
 
-    tk.Label(reg_window, text="Diagnosis").pack(pady=5)
-    diagnosis_entry = tk.Entry(reg_window)
+    tk.Label(form_frame, text="Diagnosis").pack(pady=5)
+    diagnosis_entry = tk.Entry(form_frame)
     diagnosis_entry.pack(pady=5)
     
-    tk.Label(reg_window, text="Daignosis Type").pack(pady=5)
+    tk.Label(form_frame, text="Diagnosis Type").pack(pady=5)
     diagnosis_options = ["Cardiologist", "Pediatrician", "Dermatologist", "Orthopedic Surgeon", "Neurologist"]
-    diagnosis_type_combobox = ttk.Combobox(reg_window, values=diagnosis_options)
+    diagnosis_type_combobox = ttk.Combobox(form_frame, values=diagnosis_options)
     diagnosis_type_combobox.pack(pady=5)
 
-    tk.Label(reg_window, text="Medicines").pack(pady=5)
-    medicines_entry = tk.Entry(reg_window)
+    tk.Label(form_frame, text="Medicines").pack(pady=5)
+    medicines_entry = tk.Entry(form_frame)
     medicines_entry.pack(pady=5)
     
-    submit_button = tk.Button(reg_window, text="Submit", command=lambda: submit_registration(
+    submit_button = tk.Button(form_frame, text="Submit", command=lambda: submit_registration(
         reg_window, patient_id_entry, date_entry, age_entry, heart_rate_entry,
-        bp_entry, weight_entry, height_entry, symptoms_entry, diagnosis_entry, medicines_entry,diagnosis_type_combobox, email, doctor_id
+        bp_entry, weight_entry, height_entry, symptoms_entry, diagnosis_entry, medicines_entry, diagnosis_type_combobox, email, doctor_id
     ))
     submit_button.pack(pady=20)
+
+    # Update the scrollregion after adding all widgets
+    form_frame.update_idletasks()
+    canvas.config(scrollregion=canvas.bbox("all"))
 
 root = tk.Tk()
 root.title("ABE privacy preservation")
