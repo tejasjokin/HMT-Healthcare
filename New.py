@@ -450,32 +450,6 @@ def generate_rsa_key_pair():
 
     return public_key,public_key_pem, private_key_pem
 
-
-# Initialize pairing group
-# group = PairingGroup('SS512')
-
-# # Initialize ABE scheme
-# cpabe = CPabe09(group)
-
-# def generate_abe_keys(attributes):
-#     attribute_dict = {}
-#     for attr_pair in attributes.split(','):
-#         key, value = attr_pair.split(':')
-#         attribute_dict[key] = value
-
-#     # Convert attributes to a policy (example policy)
-#     policy = f"Department:{attribute_dict['Department']} and YearsExperience>5"
-
-#     # Generate keys
-#     (pk, msk) = cpabe.setup()
-
-#     # Generate secret key based on attributes
-#     attributes_list = [(key.encode('utf-8'), value.encode('utf-8')) for key, value in attribute_dict.items()]
-#     sk = cpabe.keygen(pk, msk, attributes_list)
-
-#     return sk
-
-
 def get_database_connection():
     try:
         # Connect to MySQL database
@@ -851,7 +825,7 @@ def get_public_key_pem_from_db(email):
     try:
         cursor = db_connection.cursor()
 
-        cursor.execute("SELECT public_key_pem FROM patients WHERE email = %s", ("harshikasmishra@gmail.com",))
+        cursor.execute("SELECT public_key_pem FROM patients WHERE email = %s", (email,))
         result = cursor.fetchone()
         if result:
             public_key_pem = result[0] 
@@ -902,6 +876,33 @@ def connect_to_server():
     except Exception as e:
         print('Error connecting to server:', e)
 
+
+def send_privkey_gmail(email, doctor_id, link):
+    sender_email = "harshikasmishra@gmail.com"  # Replace with your Gmail address
+    sender_password = "sknjpguskvhjaxtl"  # Replace with your Gmail password
+
+    # Create message container
+    msg = MIMEMultipart()
+    msg['From'] = sender_email
+    msg['To'] = email
+    msg['Subject'] = "Request for Private key"
+
+    # Email body
+    body = f"The doctor with ID {doctor_id} is requesting to access data.  Please visit {link} to provide the private key"
+    msg.attach(MIMEText(body, 'plain'))
+
+    # Send email
+    try:
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()  # Secure the connection
+        server.login(sender_email, sender_password)
+        server.sendmail(sender_email, email, msg.as_string())
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"Error sending email: {e}")
+        return False
+    
 # Function to ask for patient information
 def ask_patient_consent():
     patient_info_window = tk.Toplevel()
@@ -949,6 +950,132 @@ def ask_patient_consent():
     request_button.pack(pady=10)
 
 
+def retrieve_doctor_details(doctor_id):
+    db_connection = get_database_connection()
+    if not db_connection:
+        return None
+    try:
+        cursor = db_connection.cursor()
+        cursor.execute("SELECT * FROM doctors WHERE doctor_id = %s", (doctor_id,))
+        result = cursor.fetchone()
+        if result:
+            data = {
+                "id": result[0],
+                "doctor_id": result[1],
+                "email": result[2],
+                "department": result[3],
+                "specialist": result[4],
+                "years_experience": result[5],
+                "organization": result[6]
+            }
+            cursor.close()
+            db_connection.close()
+            return data
+        else:
+            print(f"No data found for doctor_id: {doctor_id}")
+            cursor.close()
+            db_connection.close()
+            return None
+
+    except mysql.connector.Error as e:
+        print(f"Error fetching doctor details from database: {e}")
+        return None
+
+
+def retrieve_patient_level(email):
+    db_connection = get_database_connection()
+    if not db_connection:
+        return
+    try:
+        cursor = db_connection.cursor()
+
+        cursor.execute("SELECT level FROM patients WHERE email = %s", (email,))
+        result = cursor.fetchone()
+        if result:
+            level = result[0] 
+            cursor.close()
+            db_connection.close()
+            return level
+        else:
+            print(f"No level found for email: {email}")
+            return None
+
+    except mysql.connector.Error as e:
+        print(f"Error fetching level from database: {e}")
+        return None
+
+def ABAC_check(doctor_id, diagnosis):
+    # Retrieve doctor details from database
+    doctor_details = retrieve_doctor_details(doctor_id)
+
+    if not doctor_details:
+        return False  # Doctor not found in database
+    if (doctor_details["specialist"] == "cardio" and diagnosis == "10" and doctor_details["years_experience"] > 6) or \
+       (doctor_details["organization"] == "KIMM") or \
+       (doctor_details["department"] == "Orthopedics" and diagnosis.startswith("Ortho")) or \
+       (doctor_details["years_experience"] > 10) or \
+       (doctor_details["specialist"] == "pediatrician" and diagnosis == "30") or \
+       (doctor_details["organization"] == "HospitalABC" and doctor_details["years_experience"] > 5):
+        return True
+    else:
+        return False
+
+
+@socket.on('send_key_tkinter')
+def handle_key_received(data):
+    key = data.get('key')
+    print("Key received:", key)
+
+def retrieve_details_window():
+    # Create a new window for retrieving details
+    details_window = tk.Toplevel()
+    details_window.title("Retrieve Patient Details")
+
+    # Labels and Entry fields for Patient Email, Doctor ID, and Diagnosis
+    tk.Label(details_window, text="Patient Email:").pack(pady=5)
+    patient_email_entry = tk.Entry(details_window)
+    patient_email_entry.pack(pady=5)
+
+    tk.Label(details_window, text="Doctor ID:").pack(pady=5)
+    doctor_id_entry = tk.Entry(details_window)
+    doctor_id_entry.pack(pady=5)
+
+    tk.Label(details_window, text="Diagnosis:").pack(pady=5)
+    diagnosis_entry = tk.Entry(details_window)
+    diagnosis_entry.pack(pady=5)
+
+    # Function to handle the retrieval button click
+    def retrieve_data():
+        # Retrieve values from entry fields
+        email = patient_email_entry.get()
+        doctor_id = doctor_id_entry.get()
+        diagnosis = diagnosis_entry.get()
+        level = retrieve_patient_level(email)
+        print("level", level)
+        # Perform ABAC check
+        if ABAC_check(doctor_id, diagnosis):
+            messagebox.showinfo(f"Access Granted", "Access granted. Retrieving data")
+            link = 'http://localhost:8080/addkey'
+            if email and doctor_id:
+                if not socket.connected:
+                    connect_to_server()
+                    send_privkey_gmail(email, doctor_id, link)
+                socket.emit('request_patient_key', {
+                'key': True
+            })
+            details_window.destroy()
+        else:
+            messagebox.showerror("Access Denied", "Access denied. You are not authorized.")
+            details_window.destroy()
+
+    # Button to retrieve data
+    retrieve_button = tk.Button(details_window, text="Retrieve Data", command=retrieve_data)
+    retrieve_button.pack(pady=10)
+
+    # Run the details_window main loop
+    details_window.mainloop()
+
+
 def on_button_click(button_number):
     """
     Callback function for button click events.
@@ -957,25 +1084,18 @@ def on_button_click(button_number):
     if button_number == 1:
         #ask_user_type()
         enrollment()
-        # ask if they are doctors or patients
-        # if doctors then ask for attributes and check with AA and if yes then generate ABE, priv and public keys
-        # if patient then generate private and public keys and ask for L1, L2, L3, L4
-    # elif button_number == 2:
-    #     # ask patient consent
-    #     # fill the patients data
-    #     request_button = tk.Button(root, text="Request Patient Consent", command=ask_patient_consent)
-    #     request_button.pack(pady=10)
-        # ABE encrypt, hash, DS
-        # encrypt using patients public key before storing in offchain
-        # messagebox.showinfo("Verification", "Performing verification with Attribute Authority...")
-        # perform_verification()
     elif button_number == 3:
-        # Handle Certificate button click
-        registration_details = get_registration_details()
-        if registration_details:
-            request_and_verify_certificate(registration_details)
-        else:
-            messagebox.showerror("Error", "Registration details are missing.")
+        # Handle data reterival 
+        # function to get the patients email, doctor Id and diagnosis
+        # once we get the dr ID  we will call the attributes from DB and then ABAC function is called to check 
+        # that this dr has the right to access the data
+        # if yes then we will get the L1,L2,L3 ,L4 from patients DB 
+        # then we'll check if we have to provide them actual data or anonymized data
+        # if anonymized data is to be shown then no need to request ABE key (provide options like retrieve data from DB or provide on their own)
+        # else if actual data is selected then if they have a ABE key then we ask for same 
+        # based on which actual with ABE decrypted data is
+        # if no then display a pop saying access denied
+        retrieve_details_window()
     elif button_number == 4:
         registration_details = get_registration_details()
         open_encryption_window(registration_details)

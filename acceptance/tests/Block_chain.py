@@ -13,6 +13,7 @@ def saving_data1(Certificate):
 
     Certificate_=Certificate
     return Certificate_
+
 def acc_request(user):
     return print("user request accepted")
 
