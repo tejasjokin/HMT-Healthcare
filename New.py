@@ -1,7 +1,9 @@
 import warnings
+import blockchain
 
 warnings.filterwarnings("ignore")
 import tkinter as tk
+from tkinter import ttk
 from tkinter import messagebox
 import tkinter.scrolledtext as scrolledtext
 from datetime import datetime
@@ -12,6 +14,7 @@ import random
 import string
 import time
 import mysql.connector
+from globalconstants import daignosis_mapping_string_to_code, daignosis_mapping_code_to_string
 from mysql.connector import Error
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -23,6 +26,7 @@ from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 from abe import genEncryptionKey, encrypt
+from cryptoHelper import sign_data, verify_signature
 import base64
 import socketio
 import json
@@ -883,7 +887,7 @@ def handle_consent_received(data):
         if digest == original_hash:
             verified_consent = received_consent
             if( verified_consent == "yes"):
-               add_new_health_record(doctorID)
+               add_new_health_record(doctorID, email)
             elif( verified_consent == "no"):  
                 messagebox.showerror("Consent Result", "Consent not provided by patient.")           
         else:
@@ -1140,8 +1144,47 @@ def open_registration_window(new_user):
     ))
     submit_button.pack(pady=20)
 
+def input_doctor_private_key(registraton_details, email, doctor_id):
+    """
+    Accepts doctor's private key for signing patient health record
+    """
+    reg_window = tk.Toplevel(root)
+    reg_window.title("Please provide your private key")
+    
+    tk.Label(reg_window, text="Doctor's Private Key").pack(pady=5)
+    doctor_private_key_entry = tk.Entry(reg_window)
+    doctor_private_key_entry.pack(pady=5)
+    
+    def gatherDoctorPrivateKey(registration_details):
+        # Gather private key from entry
+        doctor_private_key = doctor_private_key_entry.get()
+        
+        signature, hash = sign_data(doctor_private_key, registration_details)
+        diagnosis_type_string = registration_details["Daignosis Type"]
+        diagnosis_type = daignosis_mapping_string_to_code[diagnosis_type_string]
+        hash64String = base64.b64encode(hash).decode()
+        block_data = {
+            "signature" : signature,
+            "diagnosis_type" : diagnosis_type,
+            "hash": hash64String,
+            "email": email,
+            "doctor_id": doctor_id
+        }
+        block_json_string = json.dumps(block_data)
+        chain = blockchain.blockchain()
+        chain.mineBlock(block_json_string)
+        print("Calling print", end="\n")
+        chain.printBlockchain()
+        print("Called", end="\n")
+    
+        reg_window.destroy()
+    
+    submit_button = tk.Button(reg_window, text="Submit", command=lambda: gatherDoctorPrivateKey(registraton_details))
+    submit_button.pack(pady=20)
+
+
 def submit_registration(reg_window, patient_id_entry, date_entry, age_entry, heart_rate_entry,
-                        bp_entry, weight_entry, height_entry, symptoms_entry, diagnosis_entry, medicines_entry, doctor_id):
+                        bp_entry, weight_entry, height_entry, symptoms_entry, diagnosis_entry, medicines_entry,diagnosis_type_combobox, email, doctor_id):
     """
     Handle registration submission.
     """
@@ -1154,6 +1197,7 @@ def submit_registration(reg_window, patient_id_entry, date_entry, age_entry, hea
     height = height_entry.get()
     symptoms = symptoms_entry.get()
     diagnosis = diagnosis_entry.get()
+    diagnosis_type = diagnosis_type_combobox.get()
     medicines = medicines_entry.get()
 
     registration_details = {
@@ -1166,6 +1210,7 @@ def submit_registration(reg_window, patient_id_entry, date_entry, age_entry, hea
         "Height": height,
         "Symptoms": symptoms,
         "Diagnosis": diagnosis,
+        "Daignosis Type": diagnosis_type,
         "Medicines": medicines
     }
     
@@ -1182,14 +1227,14 @@ def submit_registration(reg_window, patient_id_entry, date_entry, age_entry, hea
             encrypt_details["attribute_name"] = attribute
             encryption, tag = encrypt(registration_details[attribute], sk)
             encrypt_details["ciphertext"] = base64.b64encode(encryption).decode()
-            encrypt_details["tag"] = base64.b64encode(encryption).decode()
+            encrypt_details["tag"] = base64.b64encode(tag).decode()
             registration_details["SensitiveData"].append(encrypt_details)
         del registration_details["Symptoms"]
         del registration_details["Diagnosis"]
-        json_string = json.dumps(registration_details)
-        print("json", json_string)
+        print("Registration: ",registration_details)
+        input_doctor_private_key(registration_details, email, doctor_id)
 
-    messagebox.showinfo("Registration Info", str(registration_details))
+    messagebox.showinfo("Registration Info", str(registration_details, base64.b64encode(encryption).decode()))
     reg_window.destroy()
     
 def get_doctor_info(doctor_id):
@@ -1212,7 +1257,7 @@ def get_doctor_info(doctor_id):
         print(f"Error fetching doctor information: {e}")
         messagebox.showerror("Database Error", "Failed to fetch doctor information.")
         
-def add_new_health_record(doctor_id: str):
+def add_new_health_record(doctor_id: str, email: str):
     """
     Add new health record window.
     """
@@ -1255,6 +1300,11 @@ def add_new_health_record(doctor_id: str):
     tk.Label(reg_window, text="Diagnosis").pack(pady=5)
     diagnosis_entry = tk.Entry(reg_window)
     diagnosis_entry.pack(pady=5)
+    
+    tk.Label(reg_window, text="Daignosis Type").pack(pady=5)
+    diagnosis_options = ["Cardiologist", "Pediatrician", "Dermatologist", "Orthopedic Surgeon", "Neurologist"]
+    diagnosis_type_combobox = ttk.Combobox(reg_window, values=diagnosis_options)
+    diagnosis_type_combobox.pack(pady=5)
 
     tk.Label(reg_window, text="Medicines").pack(pady=5)
     medicines_entry = tk.Entry(reg_window)
@@ -1262,7 +1312,7 @@ def add_new_health_record(doctor_id: str):
     
     submit_button = tk.Button(reg_window, text="Submit", command=lambda: submit_registration(
         reg_window, patient_id_entry, date_entry, age_entry, heart_rate_entry,
-        bp_entry, weight_entry, height_entry, symptoms_entry, diagnosis_entry, medicines_entry,doctor_id
+        bp_entry, weight_entry, height_entry, symptoms_entry, diagnosis_entry, medicines_entry,diagnosis_type_combobox, email, doctor_id
     ))
     submit_button.pack(pady=20)
 
@@ -1279,6 +1329,7 @@ root.title("ABE privacy preservation")
 button1 = tk.Button(root, text="Enrollment", command=lambda: on_button_click(1))
 button2 = tk.Button(root, text="Checkup details", command=ask_patient_consent)
 button3 = tk.Button(root, text="Data retrieval", command=lambda: on_button_click(3))
+button3 = tk.Button(root, text="Save", command=lambda: on_button_click(4))
 button6 = tk.Button(root, text="Exit", command=root.quit)
 
 button1.pack(pady=9)

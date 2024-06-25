@@ -4,6 +4,7 @@ from cryptography.hazmat.primitives.serialization import load_pem_public_key, lo
 from cryptography.hazmat.backends import default_backend
 import json
 import base64
+import hashlib
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 def generate_rsa_key_pair():
@@ -71,12 +72,12 @@ def sign_data(private_key_pem, data):
 
         # Encode signature to base64 for readability
         signature_b64 = base64.b64encode(signature).decode('utf-8')
-        return signature_b64
+        return signature_b64, digest
 
     except Exception as e:
         print(f"An error occurred during signing: {e}")
         return None
-
+    
 # Example function for verifying signature
 def verify_signature(public_key_pem, data, signature_b64):
     try:
