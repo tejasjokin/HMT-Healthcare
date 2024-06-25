@@ -26,7 +26,7 @@ from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 from abe import genEncryptionKey, encrypt
-from cryptoHelper import sign_data, verify_signature
+from cryptoHelper import sign_data, verify_signature, encrypt_data, decrypt_data
 import base64
 import socketio
 import json
@@ -465,6 +465,43 @@ def get_database_connection():
         messagebox.showerror("Database Error", "Failed to connect to the database.")
         return None
 
+def upload_record_to_IPFS(data, hash):
+    db_connection = get_database_connection()
+    if not db_connection:
+        return
+    try:
+        cursor = db_connection.cursor()
+
+        # Create health_records table if not exists
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS health_records (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                hash TEXT,
+                data TEXT
+            )
+        """)
+
+        # Insert health_records info into table
+        sql = """
+            INSERT INTO health_records (hash,data)
+            VALUES (%s, %s)
+        """
+        values = (hash, data)
+        cursor.execute(sql, values)
+
+        # Commit changes
+        db_connection.commit()
+
+        # Close cursor and connection
+        cursor.close()
+        db_connection.close()
+
+        print("Health records information stored successfully!")
+        messagebox.showinfo("Success", "Health records information stored successfully!")
+
+    except Error as e:
+        print(f"Error storing health records information: {e}")
+        messagebox.showerror("Database Error", "Failed to store health records information.")
 
 def store_doctor_info(doctor_id, email, department, specialist, years_experience, organization, public_key, public_key_pem, abe_secret_key):
     db_connection = get_database_connection()
@@ -1280,7 +1317,7 @@ def input_doctor_private_key(registraton_details, email, doctor_id, add_new_heal
         doctor_private_key = doctor_private_key_entry.get()
         
         signature, hash = sign_data(doctor_private_key, registration_details)
-        diagnosis_type_string = registration_details["Daignosis Type"]
+        diagnosis_type_string = registration_details["Diagnosis Type"]
         diagnosis_type = daignosis_mapping_string_to_code[diagnosis_type_string]
         hash64String = base64.b64encode(hash).decode()
         block_data = {
@@ -1291,7 +1328,8 @@ def input_doctor_private_key(registraton_details, email, doctor_id, add_new_heal
             "doctor_id": doctor_id
         }
         block_json_string = json.dumps(block_data)
-        chain.mineBlock(block_json_string)
+        upload_record_to_IPFS(block_json_string, hash64String)
+        chain.mineBlock(block_json_string, email)
         chain.printBlockchain()
         add_new_health_record_window.destroy()
         reg_window.destroy()
@@ -1328,7 +1366,7 @@ def submit_registration(reg_window, patient_id_entry, date_entry, age_entry, hea
         "Height": height,
         "Symptoms": symptoms,
         "Diagnosis": diagnosis,
-        "Daignosis Type": diagnosis_type,
+        "Diagnosis Type": diagnosis_type,
         "Medicines": medicines
     }
     
