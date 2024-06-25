@@ -1291,11 +1291,8 @@ def input_doctor_private_key(registraton_details, email, doctor_id):
             "doctor_id": doctor_id
         }
         block_json_string = json.dumps(block_data)
-        chain = blockchain.blockchain()
         chain.mineBlock(block_json_string)
-        print("Calling print", end="\n")
         chain.printBlockchain()
-        print("Called", end="\n")
     
         reg_window.destroy()
     
@@ -1351,7 +1348,6 @@ def submit_registration(reg_window, patient_id_entry, date_entry, age_entry, hea
             registration_details["SensitiveData"].append(encrypt_details)
         del registration_details["Symptoms"]
         del registration_details["Diagnosis"]
-        print("Registration: ",registration_details)
         input_doctor_private_key(registration_details, email, doctor_id)
 
     messagebox.showinfo("Registration Info", str(registration_details, base64.b64encode(encryption).decode()))
@@ -1446,10 +1442,12 @@ root.title("ABE privacy preservation")
 # # button5 = tk.Button(root, text="Anonymisation", command=lambda: on_button_click(5))
 # button5 = tk.Button(root, text="Data user", command=lambda: on_button_click(5))
 
+global chain
+chain = blockchain.blockchain()
+
 button1 = tk.Button(root, text="Enrollment", command=lambda: on_button_click(1))
 button2 = tk.Button(root, text="Checkup details", command=ask_patient_consent)
 button3 = tk.Button(root, text="Data retrieval", command=lambda: on_button_click(3))
-button3 = tk.Button(root, text="Save", command=lambda: on_button_click(4))
 button6 = tk.Button(root, text="Exit", command=root.quit)
 
 button1.pack(pady=9)
