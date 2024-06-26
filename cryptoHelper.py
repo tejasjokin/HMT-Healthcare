@@ -150,6 +150,8 @@ def encrypt_data(public_key_pem, data):
         print(f"An error occurred during encryption: {e}")
         return None
 
+#encrypting_data = ["ONZl1pUOah5wHdT1watUDeR7X+qUWcrWiXaw+9yV8iO5JK5Fm3B8OKQvakoYXVjsnKeFooeEWvjAyA0nViGtf0Fdqfv2rnnfkhYrTHZ4wjkTVCAUQn7wraPJJt0QoL3yIX37MPzUc6rojgBgl/hkjFBgeCr16ZcBM/3c0kvOqGbsxfgl1aTmJNigBe1b2HC2HeGPvV31Nm3v6n273gdnFNpgYCk5rRTxij89F5BeSdqLux6hE2iUqXoBuHxWi/EfjkUvdsqZpjNyQ2hR8MGgswujfiNxIT3bcnUmBA+2qIs4aPh3jpaagWK6KsETxXCuJWqeLT0fZbBfzd4xembNEb4utHXbGDCRnWSZdtYqIQLH8bcuxNEX/Uy44xvE0rLDqC3Av2tUaY6j0XwRxbLVBtYc/rKsR7TsntRqgHBKVU0NiLeHEIkXGJVqijCo/0pY3Am38lOsFANt5waXdrrBqKJIyMOn7M9PI4LG8OTbSvCSdWW9HyIyucdLiecrU016FdouE5DsISR/aoO3JegsDQY/eHoFjZy1lRYzmIV+5BZcPahKS48RErQFgB94xARerOxpw01LoXxYo57Yq5aiBkrpu80nnbYPLAp0+yOD6BReM+sSFS+DVRVktvAOXc0XhTEcf30WTsLZIjXD497I2wuG32UVEX1rzSY0TBxmFRU"]
+
 def decrypt_data(private_key_pem, encrypted_chunks):
     try:
         # Load the private key from PEM format
@@ -164,16 +166,22 @@ def decrypt_data(private_key_pem, encrypted_chunks):
 
         # Decode each encrypted chunk, decrypt it, and accumulate decrypted chunks
         for encrypted_chunk_b64 in encrypted_chunks:
-            encrypted_chunk = base64.b64decode(encrypted_chunk_b64)
-            decrypted_chunk = private_key.decrypt(
-                encrypted_chunk,
-                padding.OAEP(
-                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                    algorithm=hashes.SHA256(),
-                    label=None
+            try:
+                encrypted_chunk = base64.b64decode(encrypted_chunk_b64)
+                print("encrypted_chunk: ", encrypted_chunk)
+                decrypted_chunk = private_key.decrypt(
+                    encrypted_chunk,
+                    padding.OAEP(
+                        mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                        algorithm=hashes.SHA256(),
+                        label=None
+                    )
                 )
-            )
-            decrypted_chunks.append(decrypted_chunk)
+                decrypted_chunks.append(decrypted_chunk)
+                print("decrypted_chunk: ", decrypted_chunk)
+            except Exception as inner_e:
+                print(f"An error occurred during chunk decryption: {inner_e}")
+                return None
 
         # Concatenate decrypted chunks and decode JSON
         decrypted_data = json.loads(b"".join(decrypted_chunks).decode('utf-8'))
@@ -183,79 +191,78 @@ def decrypt_data(private_key_pem, encrypted_chunks):
         print(f"An error occurred during decryption: {e}")
         return None
 
-
 # Generate RSA key pair (if not already generated)
 #public_key_ssh, public_key_pem, private_key_pem = generate_rsa_key_pair()
 
 private_key_pem = """
 -----BEGIN PRIVATE KEY-----
-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
-rzwAvRF7Khe5yXywHPOt662bUY13Aw==
+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
+F2LvzQ2ZVR2dhvLXZc8YZBJUddvb
 -----END PRIVATE KEY-----
 """
 
 public_key_pem=""" 
 -----BEGIN PUBLIC KEY-----
-MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA8krzFriWYDBGXvWlEzK0
-T+Pm8s/CkA7axtaFNXhL+VcCd+ROVeSsUuw6h38zsjnOZplnk28EQYl9V8yRoFDm
-OsLcFY9Auc7TcABP9AphNqLYfG5fpeSmsRvh+7lxVq6/wiXpxSNkNZbN6Bf9KQFr
-uEGbqy04H5YiMP8Bi6m74p+x3J/ggEYDAVrQn7ACHcfCAJXEtBVSoPgVi6LvUz0r
-GLPBvlqjPNjJeRzT2K1vfobggwwoHTvf/4My/b55loK//C1w4KFT1sQVoqK8y73V
-XkT8s4EiNmx3qzS+Eum3vRVNBM+Z6u48N6qsqoWHz0wr/uqOJfOh6460+GbXX+T1
-uw9UiuIzjdpGor+KLrVYr0eHJfbMvebQ6aHW8PxgxofXcZbAxpDMP6L57zXJa93m
-Kom03PsKg5MVj0+ugwirZPk30MbUtdxAC6bFS/j1ELtD9M4oALyWu1CF6OF9G/qF
-K7ENEqCe120cq9TPKBvWjmT32RYdhubfItIUF0ldcMgO02vWZjwzIb/HIEUfLln3
-/l7qGd/Tua0q60mIpL7KimxsLwiRIDyjshSknaURYDOTfjVNaVDVZNyAUqJCT1c9
-M3Vs7WPZFuHJQljeRCGX/Q1mB87ZtKeA3UobOidD4s4wsGLjtBTBohN+GveOhk/2
-d37f7o+GxQIEl/mA+UCcIAECAwEAAQ==
+MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAuHAvrTG/0IXikTW8yyeX
+R4zaaF/uiFclfC7lFaxWNdfWdkfo3otQCI0h4h6pH/eyALSIZzVMlPmrqW13hqAE
+2TiN/xXsmrMo0rDQIZSk1PrQMvLVnp6s3nHk/lBuO4yW/Zts7zalncrrnZkqtcIC
+OkqLYHY7ngQ2R7aW7fQgTxDDjQkTx7YSLI3oeU6RZLCVO2hpEx684TsvRp/uhbZU
+91D2EzEv1JAg6uYgNiBO7XBLMra1yPUAEOk5oG5fBSWG9wm9Kko40HaTJ/R+NHsB
+W+gNtp/B5eOxSyNLob6EEZO9dxzYE5CxLDM9T6jG46XlK/1w8p6RCwlDm51gOhA6
+1Ibb/L7Zil5EY32LX9vp4Yoq90B0rtt9JuA+1kQkyoAD6ZOsvUSSEekQ7rIrFXlK
+lMFjd2Q+DjLDFbv2p8gGSOqsBO//7F8+JlFQi8K2id5JZvZSIgOhze7ES5J12nCp
+EarAjYD4bxX54QhcCnlsHUxvJiBVjhjtCSvK26AoTLY6xS3lCsELsPvRmhMAfdMY
+6yzfaGVphsIu1t0VRGxNdlhsKlg1aiM1bEvAPXCIDMhbTNt3E/Jmirp/h4t+3p/U
+M9YL7DgFJb5oWuUudmTK8ZYSCLYfrgmpHy9oFRIUoLG1kme80YFAj2+eEzQe001T
+/93b9CwvJdsLq3pP5duNCb8CAwEAAQ==
 -----END PUBLIC KEY-----
 """
 

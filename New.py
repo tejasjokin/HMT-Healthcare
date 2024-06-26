@@ -1047,8 +1047,8 @@ def ABAC_check(doctor_id, diagnosis):
 
     if not doctor_details:
         return False  # Doctor not found in database
-    if (doctor_details["specialist"] == "cardio" and diagnosis == "10" and doctor_details["years_experience"] > 6) or \
-       (doctor_details["organization"] == "KIMM") or \
+    if (doctor_details["specialist"] == "cadio" and diagnosis == "10" and doctor_details["years_experience"] > 6) or \
+       (doctor_details["organization"] == "KIM") or \
        (doctor_details["department"] == "Orthopedics" and diagnosis.startswith("Ortho")) or \
        (doctor_details["years_experience"] > 10) or \
        (doctor_details["specialist"] == "pediatrician" and diagnosis == "30") or \
@@ -1058,10 +1058,47 @@ def ABAC_check(doctor_id, diagnosis):
         return False
 
 
-@socket.on('send_key_tkinter')
-def handle_key_received(data):
-    key = data.get('key')
-    print("Key received:", key)
+def retrieve_data_from_IPFS(hash):
+    db_connection = get_database_connection()
+    if not db_connection:
+        return
+    try:
+        cursor = db_connection.cursor()
+
+        cursor.execute("SELECT data FROM health_records WHERE hash = %s", (hash,))
+        result = cursor.fetchone()
+        if result:
+            data = result[0] 
+            cursor.close()
+            db_connection.close()
+            return data
+        else:
+            print(f"No data found for hash: {hash}")
+            return None
+
+    except mysql.connector.Error as e:
+        print(f"Error fetching data from IPFS: {e}")
+        return None
+
+def authorization_check(doctor_id, level):
+    auth = True
+    if level == "L1":
+        # ask for ABE key
+        return "Actual Data"
+    elif level == "L2":
+        if auth:
+          # ask for ABE key
+          return "Actual Data"
+        else:
+            return "No"
+    elif level == "L3":
+          if auth:
+            # ask for ABE key
+            return "Actual Data"
+          else:
+            return "Anonymized Data"
+    elif level == "L4":
+        return "Anonymized Data"
 
 def retrieve_details_window():
     # Create a new window for retrieving details
@@ -1086,7 +1123,7 @@ def retrieve_details_window():
         # Retrieve values from entry fields
         email = patient_email_entry.get()
         doctor_id = doctor_id_entry.get()
-        diagnosis = diagnosis_entry.get()
+        diagnosis = diagnosis_entry.get() # get the mapping data 
         level = retrieve_patient_level(email)
         print("level", level)
         # Perform ABAC check
@@ -1100,6 +1137,32 @@ def retrieve_details_window():
                 socket.emit('request_patient_key', {
                 'key': True
             })
+            def handle_key_received(data):
+                priv_key_pem_afterABAC_check = data.get('key')
+                print("Key received2:", priv_key_pem_afterABAC_check)
+                # reterive patients details based on email and diagnosis from blockchain
+                # after that get the hash of the data and then get the data from IPFS (request patients private key)
+                hash = "MdHXtRU4VJ4/jQjSgwYEeBadCdIMHkI6+YlAiUR7zn4="
+                encrypted_data_str= retrieve_data_from_IPFS(hash)
+                encrypted_data =json.loads(encrypted_data_str)
+                print("encrypted data:", encrypted_data)
+                decrypted_data = decrypt_data(priv_key_pem_afterABAC_check, encrypted_data)
+                print("Decrypted data:", decrypted_data)
+                display_type= authorization_check(doctor_id, level)
+                print("Display Type:", display_type)
+                if display_type == "Actual Data":
+                    messagebox.showinfo("Patient Details", decrypted_data)
+                elif display_type == "Anonymized Data":
+                    open_anomization_window(decrypted_data)
+                    messagebox.showinfo("Patient Details", "Anonymized Data")
+                else:
+                    messagebox.showinfo("Patient Details", "No access")
+
+                # check the drId or anyId for authorized and unauthorized access 
+                # and accordingly show actual or anonymized data
+                # if anonymized data is to be shown then no need to request ABE key (provide options like retrieve data from DB or provide on their own)
+                # else if actual data is selected then if they have a ABE key then we ask for same
+            socket.on('send_key_tkinter', handle_key_received)
             details_window.destroy()
         else:
             messagebox.showerror("Access Denied", "Access denied. You are not authorized.")
@@ -1328,7 +1391,15 @@ def input_doctor_private_key(registraton_details, email, doctor_id, add_new_heal
             "doctor_id": doctor_id
         }
         block_json_string = json.dumps(block_data)
-        upload_record_to_IPFS(block_json_string, hash64String)
+        # but we dont have to encrypt block data we have to encrypt only the actual and ABE encrypted data
+        # encrypt the data with patients public key and then upload it to IPFS with its hash
+
+        
+        pub_key_pem = get_public_key_pem_from_db(email)
+        print("encrypting registration details", registration_details, "with hash of",hash64String)
+        encrypted_data = encrypt_data(pub_key_pem, registration_details)
+        encrypted_data_str = json.dumps(encrypted_data) # convert to string
+        upload_record_to_IPFS(encrypted_data_str, hash64String)
         chain.mineBlock(block_json_string, email)
         chain.printBlockchain()
         add_new_health_record_window.destroy()
@@ -1508,6 +1579,8 @@ root.title("ABE privacy preservation")
 
 global chain
 chain = blockchain.blockchain()
+global priv_key_pem_afterABAC_check
+priv_key_pem_afterABAC_check = None
 
 button1 = tk.Button(root, text="Enrollment", command=lambda: on_button_click(1))
 button2 = tk.Button(root, text="Checkup details", command=ask_patient_consent)
