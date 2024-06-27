@@ -25,7 +25,7 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
-from abe import genEncryptionKey, encrypt
+from abe import genEncryptionKey, encrypt, decrypt
 from cryptoHelper import sign_data, verify_signature, encrypt_data, decrypt_data
 import base64
 import socketio
@@ -503,7 +503,7 @@ def upload_record_to_IPFS(data, hash):
         print(f"Error storing health records information: {e}")
         messagebox.showerror("Database Error", "Failed to store health records information.")
 
-def store_doctor_info(doctor_id, email, department, specialist, years_experience, organization, public_key, public_key_pem, abe_secret_key):
+def store_doctor_info(doctor_id, email, department, specialist, years_experience, organization, public_key, public_key_pem):
     db_connection = get_database_connection()
     if not db_connection:
         return
@@ -520,7 +520,6 @@ def store_doctor_info(doctor_id, email, department, specialist, years_experience
                 specialist VARCHAR(100),
                 years_experience INT,
                 organization VARCHAR(100),
-                abe_secret_key TEXT,
                 public_key TEXT,
                 public_key_pem TEXT
             )
@@ -535,10 +534,10 @@ def store_doctor_info(doctor_id, email, department, specialist, years_experience
 
         # Insert doctor info into table
         sql = """
-            INSERT INTO doctors (doctor_id,email, department, specialist, years_experience, organization, public_key,public_key_pem, abe_secret_key)
+            INSERT INTO doctors (doctor_id,email, department, specialist, years_experience, organization, public_key,public_key_pem)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
-        values = (doctor_id, email, department, specialist, years_experience, organization, public_key, public_key_pem, abe_secret_key)
+        values = (doctor_id, email, department, specialist, years_experience, organization, public_key, public_key_pem)
         cursor.execute(sql, values)
 
         # Commit changes
@@ -564,6 +563,7 @@ def submit_doctor_info():
     organization = organization_entry.get()
     if doctor_id and department and specialist and years_experience and organization:
         pub_key, public_key_pem, priv_key = generate_rsa_key_pair()
+        abe_secret_key = genEncryptionKey([years_experience, organization])
 
         # Send OTP via email
         email = email_entry.get()
@@ -591,7 +591,7 @@ def submit_doctor_info():
                     keys_window.title("Generated Keys")
                     keys_window.geometry("500x300")  # Set the size of the keys window
 
-                    keys_text = f"Public Key:\n{pub_key}\n\nPrivate Key:\n{priv_key}\n\nPublic Key (PEM Format):\n{public_key_pem}"
+                    keys_text = f"Public Key:\n{pub_key}\n\nPrivate Key:\n{priv_key}\n\nPublic Key (PEM Format):\n{public_key_pem}\n\nABE Key:\n{base64.b64encode(abe_secret_key).decode()}"
                     keys_text_widget = scrolledtext.ScrolledText(keys_window, width=60, height=10)
                     keys_text_widget.insert(tk.END, keys_text)
                     keys_text_widget.pack(pady=10)
@@ -606,8 +606,7 @@ def submit_doctor_info():
 
                     def close_keys_window():
                         keys_window.destroy()
-                        abe_secret_key = genEncryptionKey([years_experience, organization])
-                        store_doctor_info(doctor_id, email, department, specialist, years_experience, organization, pub_key, public_key_pem, base64.b64encode(abe_secret_key).decode())
+                        store_doctor_info(doctor_id, email, department, specialist, years_experience, organization, pub_key, public_key_pem)
                         reg_window.destroy()
 
                     ok_button = tk.Button(keys_window, text="OK", command=close_keys_window)
@@ -965,22 +964,23 @@ def ask_patient_consent():
     def send_consent_request():
         email = email_entry.get()
         doctor_id = doctor_id_entry.get()
-        date = date_entry.get()
-        link = 'http://localhost:8080/'
-        if email and doctor_id and date:
-            if not socket.connected:
-                connect_to_server()
-            send_consent_gmail(email, doctor_id, date, link)
-            # Send consent request to server
-            socket.emit('request_patient_consent', {
-                'email': email,
-                'doctor_id': doctor_id,
-                'date': date
-            })
+        add_new_health_record(doctor_id, email)
+        # date = date_entry.get()
+        # link = 'http://localhost:8080/'
+        # if email and doctor_id and date:
+        #     if not socket.connected:
+        #         connect_to_server()
+        #     send_consent_gmail(email, doctor_id, date, link)
+        #     # Send consent request to server
+        #     socket.emit('request_patient_consent', {
+        #         'email': email,
+        #         'doctor_id': doctor_id,
+        #         'date': date
+        #     })
 
-            patient_info_window.destroy()
-        else:
-            messagebox.showerror("Error", "Please fill in all fields.")
+        #     patient_info_window.destroy()
+        # else:
+        #     messagebox.showerror("Error", "Please fill in all fields.")
 
     # Button to request consent
     request_button = tk.Button(patient_info_window, text="Request Consent", command=send_consent_request)
@@ -1099,6 +1099,58 @@ def authorization_check(doctor_id, level):
             return "Anonymized Data"
     elif level == "L4":
         return "Anonymized Data"
+    
+def input_abe_key_for_decryption(decrypted_data, doctor_id):
+    """
+    Accept doctor's ABE for decrypting sensitive data
+    """
+    abe_decryption = tk.Toplevel(root)
+    abe_decryption.title("Please provide your ABE key")
+    
+    tk.Label(reg_window, text="Doctor's ABE Key").pack(pady=5)
+    doctor_abe_key_entry = tk.Entry(reg_window)
+    doctor_abe_key_entry.pack(pady=5)
+    
+    def GatherDoctorForDecryption(decrypted_data, doctor_id):
+        abe_secret_key = doctor_abe_key_entry.get()
+        sk = base64.b64decode(abe_secret_key)
+        sensitiveData = decrypted_data['SensitiveData']
+        for sensitive_entry in sensitiveData:
+            cipher = sensitive_entry['ciphertext'].decode()
+            tag = sensitive_entry['tag'].decode()
+            doctor_data = retrieve_doctor_details(doctor_id)
+            attributes_list = [doctor_data['decrypt_sensitive_data'], doctor_data['organization']]
+            decrypt_message = decrypt(sk, cipher, attributes_list, tag)
+            attribute_name = sensitive_entry['attribute_name']
+            decrypted_data[attribute_name] = decrypt_message
+        del decrypted_data['SensitiveData']
+        messagebox.showinfo("Patient Details", decrypted_data)
+        abe_decryption.destroy()
+        
+    
+    submit_button = tk.Button(reg_window, text="Submit", command=lambda: GatherDoctorForDecryption(decrypted_data, doctor_id))
+    submit_button.pack(pady=20)
+    
+    
+    
+    
+def decrypt_sensitive_data(decrypted_data, doctor_id):
+    """
+    Further process for decrypting sensitive data
+    """
+    reg_window = tk.Toplevel()
+    reg_window.title("Sensitive data decryption")
+    
+    tk.Label(reg_window, text="Would you like to decrypt sensitive data?").pack(pady=5)
+    options = ["Yes", "No"]
+    selection = ttk.Combobox(reg_window, values=options)
+    selection.pack(pady=5)
+    
+    if selection.get() == "Yes":
+        input_abe_key_for_decryption(decrypted_data, doctor_id)
+    else:
+        messagebox.showinfo("Patient Details", decrypted_data)
+        reg_window.destroy()
 
 def retrieve_details_window():
     # Create a new window for retrieving details
@@ -1140,23 +1192,24 @@ def retrieve_details_window():
             def handle_key_received(data):
                 priv_key_pem_afterABAC_check = data.get('key')
                 print("Key received2:", priv_key_pem_afterABAC_check)
-                # reterive patients details based on email and diagnosis from blockchain
+                # retrieve patients details based on email and diagnosis from blockchain
+                hash_list = retrieve_health_record(email, diagnosis)
                 # after that get the hash of the data and then get the data from IPFS (request patients private key)
-                hash = "MdHXtRU4VJ4/jQjSgwYEeBadCdIMHkI6+YlAiUR7zn4="
-                encrypted_data_str= retrieve_data_from_IPFS(hash)
-                encrypted_data =json.loads(encrypted_data_str)
-                print("encrypted data:", encrypted_data)
-                decrypted_data = decrypt_data(priv_key_pem_afterABAC_check, encrypted_data)
-                print("Decrypted data:", decrypted_data)
-                display_type= authorization_check(doctor_id, level)
-                print("Display Type:", display_type)
-                if display_type == "Actual Data":
-                    messagebox.showinfo("Patient Details", decrypted_data)
-                elif display_type == "Anonymized Data":
-                    open_anomization_window(decrypted_data)
-                    messagebox.showinfo("Patient Details", "Anonymized Data")
-                else:
-                    messagebox.showinfo("Patient Details", "No access")
+                for hash in hash_list:
+                    encrypted_data_str= retrieve_data_from_IPFS(hash)
+                    encrypted_data =json.loads(encrypted_data_str)
+                    print("encrypted data:", encrypted_data)
+                    decrypted_data = decrypt_data(priv_key_pem_afterABAC_check, encrypted_data)
+                    print("Decrypted data:", decrypted_data)
+                    display_type= authorization_check(doctor_id, level)
+                    print("Display Type:", display_type)
+                    if display_type == "Actual Data":
+                        decrypt_sensitive_data(decrypted_data, doctor_id)
+                    elif display_type == "Anonymized Data":
+                        open_anomization_window(decrypted_data)
+                        messagebox.showinfo("Patient Details", "Anonymized Data")
+                    else:
+                        messagebox.showinfo("Patient Details", "No access")
 
                 # check the drId or anyId for authorized and unauthorized access 
                 # and accordingly show actual or anonymized data
@@ -1175,6 +1228,16 @@ def retrieve_details_window():
     # Run the details_window main loop
     details_window.mainloop()
 
+def retrieve_health_record(email, diagnosistype):
+    if email:
+        encrypted_records = []
+        retrieved_block = chain.retrieveBlock(email)
+        for json_record in retrieved_block:
+            encrypted_record = json.loads(json_record)
+            if str(encrypted_record['diagnosis_type']) == diagnosistype:
+                encrypted_records.append(encrypted_record['hash'])
+        return encrypted_records
+        
 
 def on_button_click(button_number):
     """
@@ -1378,7 +1441,6 @@ def input_doctor_private_key(registraton_details, email, doctor_id, add_new_heal
     def gatherDoctorPrivateKey(registration_details):
         # Gather private key from entry
         doctor_private_key = doctor_private_key_entry.get()
-        
         signature, hash = sign_data(doctor_private_key, registration_details)
         diagnosis_type_string = registration_details["Diagnosis Type"]
         diagnosis_type = daignosis_mapping_string_to_code[diagnosis_type_string]
@@ -1409,7 +1471,36 @@ def input_doctor_private_key(registraton_details, email, doctor_id, add_new_heal
     submit_button = tk.Button(reg_window, text="Submit", command=lambda: gatherDoctorPrivateKey(registraton_details))
     submit_button.pack(pady=20)
 
+def input_abe_key(registration_details, doctor_id, email):
+    """
+    Accepts doctor's ABE key for signing patient health record
+    """
+    reg_window = tk.Toplevel(root)
+    reg_window.title("Please provide your ABE key")
+    
+    tk.Label(reg_window, text="Doctor's ABE Key").pack(pady=5)
+    doctor_abe_key_entry = tk.Entry(reg_window)
+    doctor_abe_key_entry.pack(pady=5)
 
+    def gatherDoctorAbeKey(registration_details):
+        abe_secret_key = doctor_abe_key_entry.get()
+        sk = base64.b64decode(abe_secret_key)
+        sensitive_attributes = ["Symptoms", "Diagnosis"]
+        registration_details["SensitiveData"] = []
+        for attribute in sensitive_attributes:
+            encrypt_details = {}
+            encrypt_details["attribute_name"] = attribute
+            encryption, tag = encrypt(registration_details[attribute], sk)
+            encrypt_details["ciphertext"] = base64.b64encode(encryption).decode()
+            encrypt_details["tag"] = base64.b64encode(tag).decode()
+            registration_details["SensitiveData"].append(encrypt_details)
+        del registration_details["Symptoms"]
+        del registration_details["Diagnosis"]
+        input_doctor_private_key(registration_details, email, doctor_id, reg_window)
+    
+    submit_button = tk.Button(reg_window, text="Submit", command=lambda: gatherDoctorAbeKey(registration_details))
+    submit_button.pack(pady=20)
+    
 def submit_registration(reg_window, patient_id_entry, date_entry, age_entry, heart_rate_entry,
                         bp_entry, weight_entry, height_entry, symptoms_entry, diagnosis_entry, medicines_entry,diagnosis_type_combobox, email, doctor_id):
     """
@@ -1441,24 +1532,11 @@ def submit_registration(reg_window, patient_id_entry, date_entry, age_entry, hea
         "Medicines": medicines
     }
     
-    column_names = ('id', 'doctor_id','email','department','specialist','years_experience','organization','abe_secret_key','public_key')
+    column_names = ('id', 'doctor_id','email','department','specialist','years_experience','organization','public_key')
     doctor = get_doctor_info(doctor_id)
     if doctor:
         doctor_dict = dict(zip(column_names, doctor))
-        abe_secret_key = doctor_dict['abe_secret_key']
-        sk = base64.b64decode(abe_secret_key)
-        sensitive_attributes = ["Symptoms", "Diagnosis"]
-        registration_details["SensitiveData"] = []
-        for attribute in sensitive_attributes:
-            encrypt_details = {}
-            encrypt_details["attribute_name"] = attribute
-            encryption, tag = encrypt(registration_details[attribute], sk)
-            encrypt_details["ciphertext"] = base64.b64encode(encryption).decode()
-            encrypt_details["tag"] = base64.b64encode(tag).decode()
-            registration_details["SensitiveData"].append(encrypt_details)
-        del registration_details["Symptoms"]
-        del registration_details["Diagnosis"]
-        input_doctor_private_key(registration_details, email, doctor_id, reg_window)
+        input_abe_key(registration_details, doctor_id, email)
 
     messagebox.showinfo("Registration Info", str(registration_details, base64.b64encode(encryption).decode()))
     reg_window.destroy()

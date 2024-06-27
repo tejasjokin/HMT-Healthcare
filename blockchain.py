@@ -31,6 +31,12 @@ class blockchain:
         # mining a new block to the blockchain
         self.chain.append(node)
         self.block_index[email] = len(self.chain)-1
+    
+    def retrieveBlock(self, email):
+        if email in self.block_index.keys():
+            block_index = self.block_index[email]
+            retrievedBlock = self.chain[block_index]
+            return retrievedBlock.data
 
     def printBlockchain(self):
         print("Index dict: ", self.block_index)
