@@ -76,7 +76,6 @@ def calculate_throughput(data_size_bytes, encryption_function, *args):
 def anonymize_age(age):
     # Parse the input date string
     a1 = age.split()
-
     a11 = int(a1[0])
 
     return a11,a1
@@ -105,41 +104,35 @@ def anonymized_weight(d):
     # Parse the input date string
     da = d.split()
     a11 = int(da[0])
-    return a11,da[1]
+    return a11,da[0]
 
 
 def anonymized_height(d):
     # Parse the input date string
     da = d.split()
     a11 = int(da[0])
-    return a11, da[1]
+    return a11, da[0]
 
 def open_anomization_window(registration_details):
-    print('Patient ID:',registration_details['Patient ID'])
+    data=""
     dates =registration_details['Date']
     anonymized_dates = anonymize_date(dates)
+    data= data + f'Patient ID:{registration_details["Patient ID"]}'+ '\n Date:'+ anonymized_dates + '\n'
     a =registration_details['Age']
-    a11,a1 = anonymize_age(a)
-    print('Date:',anonymized_dates)
-    print('Age:',(a11-5,'-',a11+5,a1[1]))
+    a11 = anonymize_age(a)
+    data = data + f'Age:{a11-5}-{a11+5}'+ '\n'
     aa = registration_details['Heart Rate']
     b = check_heart_rate(aa)
-    print('Heart Rate:',b)
     c = registration_details['Blood Pressure']
     status = check_blood_pressure(c)
-    print('Blood Pressure:', status)
+    data = data + f'Heart Rate:{b}' + '\n' + f'Blood Pressure:{status}' + '\n'
     cc = registration_details['Weight']
-    a11,aa2 = anonymized_weight(cc)
-    print('Weight:', a11 - 5, '-', a11 + 7, 'kg')
+    a11 = anonymized_weight(cc)
     cc = registration_details['Height']
-    a11, aa2 = anonymized_height(cc)
-    print('Height:', a11 - 5, '-', a11 + 7, 'cm')
-    print('Symptoms:','Symptoms')
-    cc = registration_details['Diagnosis']
-    cc1 = cc.split()
-    print('Diagnosis:',cc1[1],cc1[-1])
-    print('Medicines:',registration_details['Medicines'])
-
+    a11 = anonymized_height(cc)
+    data = data + f'Weight:{a11-5}-{a11+7}kg' + '\n' + f'Height:{a11-5}-{a11+7}cm' + '\n'
+    data = data + f'Medicines:{registration_details["Medicines"]}'
+    return data 
 
 def open_encryption_window(registration_details):
         encryption_time = time.time()
@@ -1114,6 +1107,7 @@ def input_abe_key_for_decryption(decrypted_data, doctor_id):
         abe_secret_key = doctor_abe_key_entry.get()
         sk = base64.b64decode(abe_secret_key)
         sensitiveData = decrypted_data['SensitiveData']
+        
         for sensitive_entry in sensitiveData:
             cipher = sensitive_entry['ciphertext'].decode()
             tag = sensitive_entry['tag'].decode()
@@ -1142,14 +1136,14 @@ def decrypt_sensitive_data(decrypted_data, doctor_id):
     selection = ttk.Combobox(reg_window, values=options)
     selection.pack(pady=5)
     
-    def handle_selection():
+    def handle_selection(reg_window):
         if selection.get() == "Yes":
             input_abe_key_for_decryption(decrypted_data, doctor_id)
         else:
             messagebox.showinfo("Patient Details", decrypted_data)
             reg_window.destroy()
     
-    submit_button = tk.Button(reg_window, text="Submit", command=handle_selection)
+    submit_button = tk.Button(reg_window, text="Submit", command=handle_selection(reg_window))
     submit_button.pack(pady=20)
 
 def retrieve_details_window():
@@ -1206,8 +1200,8 @@ def retrieve_details_window():
                     if display_type == "Actual Data":
                         decrypt_sensitive_data(decrypted_data, doctor_id)
                     elif display_type == "Anonymized Data":
-                        open_anomization_window(decrypted_data)
-                        messagebox.showinfo("Patient Details", "Anonymized Data")
+                        data= open_anomization_window(decrypted_data)
+                        messagebox.showinfo("Patient Details", data)
                     else:
                         messagebox.showinfo("Patient Details", "No access")
 
@@ -1237,6 +1231,8 @@ def retrieve_health_record(email, diagnosistype):
                 encrypted_record = json.loads(json_record)
                 if str(encrypted_record['diagnosis_type']) == diagnosistype:
                     encrypted_records.append(encrypted_record['hash'])
+        else:
+            messagebox.showinfo("No Records", "No records found for the patient.")
         return encrypted_records
         
 
