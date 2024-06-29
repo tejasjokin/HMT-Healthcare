@@ -1108,14 +1108,14 @@ def input_abe_key_for_decryption(decrypted_data, doctor_id):
         sk = base64.b64decode(abe_secret_key)
         data = ''
         data = data + f"Patient ID: {decrypted_data['Patient ID']}"
-        data = data + f"\nData: {decrypted_data["Date"]}"
-        data = data + f"\nAge: {decrypted_data["Age"]}"
-        data = data + f"\nHeart Rate: {decrypted_data["Heart Rate"]}"
-        data = data + f"\nBlood Pressure: {decrypted_data["Blood Pressure"]}"
-        data = data + f"\nWeight: {decrypted_data["Weight"]}"
-        data = data + f"\nHeight: {decrypted_data["Height"]}"
-        data = data + f"\nDiagnosis Type: {decrypted_data["Diagnosis Type"]}"
-        data = data + f"\nMedicines: {decrypted_data["Diagnosis Type"]}"
+        data = data + f"\nData: {decrypted_data['Date']}"
+        data = data + f"\nAge: {decrypted_data['Age']}"
+        data = data + f"\nHeart Rate: {decrypted_data['Heart Rate']}"
+        data = data + f"\nBlood Pressure: {decrypted_data['Blood Pressure']}"
+        data = data + f"\nWeight: {decrypted_data['Weight']}"
+        data = data + f"\nHeight: {decrypted_data['Height']}"
+        data = data + f"\nDiagnosis Type: {decrypted_data['Diagnosis Type']}"
+        data = data + f"\nMedicines: {decrypted_data['Diagnosis Type']}"
         sensitiveData = decrypted_data['SensitiveData']
         
         for sensitive_entry in sensitiveData:
