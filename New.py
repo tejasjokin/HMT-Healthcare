@@ -934,6 +934,7 @@ def send_privkey_gmail(email, doctor_id, link):
     
 # Function to ask for patient information
 def ask_patient_consent():
+    start_time = time.time()
     patient_info_window = tk.Toplevel()
     patient_info_window.title("Patient Information")
 
@@ -1115,14 +1116,14 @@ def input_abe_key_for_decryption(decrypted_data, doctor_id):
         data = data + f"\nWeight: {decrypted_data['Weight']}"
         data = data + f"\nHeight: {decrypted_data['Height']}"
         data = data + f"\nDiagnosis Type: {decrypted_data['Diagnosis Type']}"
-        data = data + f"\nMedicines: {decrypted_data['Diagnosis Type']}"
+        data = data + f"\nMedicines: {decrypted_data['Medicines']}"
         sensitiveData = decrypted_data['SensitiveData']
         
         for sensitive_entry in sensitiveData:
             cipher = base64.b64decode(sensitive_entry['ciphertext'])
             tag = base64.b64decode(sensitive_entry['tag'])
             doctor_data = retrieve_doctor_details(doctor_id)
-            attributes_list = [doctor_data['decrypt_sensitive_data'], doctor_data['organization']]
+            attributes_list = [str(doctor_data['years_experience']), doctor_data['organization']]
             decrypt_message = decrypt(sk, cipher, attributes_list, tag)
             attribute_name = sensitive_entry['attribute_name']
             decrypted_data[attribute_name] = decrypt_message
@@ -1246,99 +1247,27 @@ def retrieve_health_record(email, diagnosistype):
             messagebox.showinfo("No Records", "No records found for the patient.")
         return encrypted_records
         
-
+def ask_patient_consent_parent():
+    ask_patient_consent()
 def on_button_click(button_number):
-    """
-    Callback function for button click events.
-    """
-    # PRE-REQUISTIES: ABAC policies 
     if button_number == 1:
-        #ask_user_type()
+        start_time = time.perf_counter()
         enrollment()
-    elif button_number == 3:
-        # Handle data reterival 
-        # function to get the patients email, doctor Id and diagnosis
-        # once we get the dr ID  we will call the attributes from DB and then ABAC function is called to check 
-        # that this dr has the right to access the data
-        # if yes then we will get the L1,L2,L3 ,L4 from patients DB 
-        # then we'll check if we have to provide them actual data or anonymized data
-        # if anonymized data is to be shown then no need to request ABE key (provide options like retrieve data from DB or provide on their own)
-        # else if actual data is selected then if they have a ABE key then we ask for same 
-        # based on which actual with ABE decrypted data is
-        # if no then display a pop saying access denied
-        retrieve_details_window()
-    elif button_number == 4:
-        registration_details = get_registration_details()
-        open_encryption_window(registration_details)
-    # elif button_number == 5:
-    #     registration_details = get_registration_details()
-    #     open_anomization_window(registration_details)
-    elif button_number == 5:
-        registration_details = get_registration_details()
-
-        def login():
-            username = entry_username.get()
-            password = entry_password.get()
-
-            # Here you would add your own login logic
-            if username == "user" and password == PUBLIC_KEY_CONSTANT:
-                messagebox.showinfo("Login Info", "Login Successful!")
-                # login_button.destroy()
-                registration_details = get_registration_details()
-                b,c,k=encryption(registration_details)
-                attributes = ["Symptoms", "Diagnosis"]
-                de= ABE.decrypt(k,b,attributes,k)
-                print('decrypted data',de)
-                messagebox.showinfo("user Info", str(registration_details))
-                root.destroy()
-                overall_latency = time.time() - start_time
-                print("Latency: ", overall_latency)
-                data_size = len(b)
-                throughput = calculate_throughput(b, time.time(), data_size)
-                print('Throughput : ', throughput*1000000)
-
-            else:
-                messagebox.showerror("Login Info", "Unauthorised user")
-                registration_details = get_registration_details()
-                open_anomization_window(registration_details)
-                overall_latency = time.time() - start_time
-                print("Latency: ", overall_latency)
-                registration_details = get_registration_details()
-                b,c,k=encryption(registration_details)
-                data_size = len(b)
-                throughput = calculate_throughput(b, time.time(), data_size)
-                print('Throughput: ', throughput*1000000)
-                root.destroy()
-
-
-        # Create the main window
-        root = tk.Tk()
-        root.title("Login")
-
-        # Create and place the username label and entry
-        label_username = tk.Label(root, text="Username")
-        label_username.grid(row=0, column=0, padx=10, pady=10)
-
-        entry_username = tk.Entry(root)
-        entry_username.grid(row=0, column=1, padx=10, pady=10)
-
-        # Create and place the password label and entry
-        label_password = tk.Label(root, text="Password")
-        label_password.grid(row=1, column=0, padx=10, pady=10)
-
-        entry_password = tk.Entry(root, show="*")
-        entry_password.grid(row=1, column=1, padx=10, pady=10)
-
-        # Create and place the login button
-        login_button = tk.Button(root, text="Login", command=login)
-        login_button.grid(row=2, columnspan=2, pady=10)
-
-        # Run the main loop
         root.mainloop()
-
-
-    else:
-        messagebox.showinfo("Button Clicked", f"Button {button_number} was clicked")
+        end_time = time.perf_counter()
+        print("time taken for enrollment", end_time-start_time)
+    elif button_number == 2:
+        start_time =  time.perf_counter()
+        ask_patient_consent_parent()
+        root.mainloop()
+        end_time =  time.perf_counter()
+        print("time taken for asking patient consent", end_time-start_time)
+    elif button_number == 3:
+        start_time =  time.perf_counter()
+        retrieve_details_window()
+        root.mainloop()
+        end_time =  time.perf_counter()
+        print("time taken for retrieving data", end_time-start_time)
 
 
 def get_registration_details():
@@ -1669,7 +1598,7 @@ global priv_key_pem_afterABAC_check
 priv_key_pem_afterABAC_check = None
 
 button1 = tk.Button(root, text="Enrollment", command=lambda: on_button_click(1))
-button2 = tk.Button(root, text="Checkup details", command=ask_patient_consent)
+button2 = tk.Button(root, text="Checkup details", command=lambda: on_button_click(2))
 button3 = tk.Button(root, text="Data retrieval", command=lambda: on_button_click(3))
 button6 = tk.Button(root, text="Exit", command=root.quit)
 

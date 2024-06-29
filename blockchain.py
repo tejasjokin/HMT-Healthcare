@@ -21,6 +21,7 @@ class blockchain:
         return block(time.ctime(), ["genesisBlock"], "00000")
 
     def mineBlock(self, data, email):
+        start_time = time.time()
         new_data = []
         if email in self.block_index.keys():
             prev_block = self.chain[self.block_index[email]]
@@ -31,11 +32,16 @@ class blockchain:
         # mining a new block to the blockchain
         self.chain.append(node)
         self.block_index[email] = len(self.chain)-1
+        end_time = time.time()
+        print("Time taken to mine the block: ", end_time - start_time)
     
     def retrieveBlock(self, email):
+        start_time = time.time()
         if email in self.block_index.keys():
             block_index = self.block_index[email]
             retrievedBlock = self.chain[block_index]
+            end_time = time.time()
+            print("Time taken to retrieve the block: ", end_time - start_time)
             return retrievedBlock.data
 
     def printBlockchain(self):
