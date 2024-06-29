@@ -561,16 +561,6 @@ def submit_doctor_info():
     specialist = specialist_entry.get()
     years_experience = years_experience_entry.get()
     organization = organization_entry.get()
-    #diagnosis = diagnosis_entry.get()
-    # tk.Label(form_frame, text="Diagnosis").pack(pady=5)
-    # diagnosis_entry = tk.Entry(form_frame)
-    # diagnosis_entry.pack(pady=5)
-    
-    # tk.Label(form_frame, text="Diagnosis Type").pack(pady=5)
-    # diagnosis_options = ["Cardiologist", "Pediatrician", "Dermatologist", "Orthopedic Surgeon", "Neurologist"]
-    # diagnosis_type_combobox = ttk.Combobox(form_frame, values=diagnosis_options)
-    # diagnosis_type_combobox.pack(pady=5)
-
     if doctor_id and department and specialist and years_experience and organization:
         pub_key, public_key_pem, priv_key = generate_rsa_key_pair()
         abe_secret_key = genEncryptionKey([years_experience, organization])
@@ -645,17 +635,7 @@ def ask_doctor_info():
     tk.Label(reg_window, text="Doctor Email:").pack(pady=5)
     global email_entry
     email_entry = tk.Entry(reg_window)
-    email_entry.pack(pady=5)
-    
-    tk.Label(reg_window, text="Years of Experience:").pack(pady=5)
-    global years_experience_entry
-    years_experience_entry = tk.Entry(reg_window)
-    years_experience_entry.pack(pady=5)
-
-    tk.Label(reg_window, text="Organization:").pack(pady=5)
-    global organization_entry
-    organization_entry = tk.Entry(reg_window)
-    organization_entry.pack(pady=5)
+    email_entry.pack(pady=5) 
 
     tk.Label(reg_window, text="Department:").pack(pady=5)
     global department_entry
@@ -666,6 +646,16 @@ def ask_doctor_info():
     global specialist_entry
     specialist_entry = tk.Entry(reg_window)
     specialist_entry.pack(pady=5)
+
+    tk.Label(reg_window, text="Years of Experience:").pack(pady=5)
+    global years_experience_entry
+    years_experience_entry = tk.Entry(reg_window)
+    years_experience_entry.pack(pady=5)
+
+    tk.Label(reg_window, text="Organization:").pack(pady=5)
+    global organization_entry
+    organization_entry = tk.Entry(reg_window)
+    organization_entry.pack(pady=5)
 
     submit_button = tk.Button(reg_window, text="Submit", command=submit_doctor_info)
     submit_button.pack(pady=10)
@@ -974,7 +964,6 @@ def ask_patient_consent():
     def send_consent_request():
         email = email_entry.get()
         doctor_id = doctor_id_entry.get()
-        add_new_health_record(doctor_id, email)
         date = date_entry.get()
         link = 'http://localhost:8080/'
         if email and doctor_id and date:
@@ -1136,12 +1125,9 @@ def input_abe_key_for_decryption(decrypted_data, doctor_id):
         del decrypted_data['SensitiveData']
         messagebox.showinfo("Patient Details", decrypted_data)
         abe_decryption.destroy()
-        
-    
+               
     submit_button = tk.Button(reg_window, text="Submit", command=lambda: GatherDoctorForDecryption(decrypted_data, doctor_id))
     submit_button.pack(pady=20)
-    
-    
     
     
 def decrypt_sensitive_data(decrypted_data, doctor_id):
@@ -1204,7 +1190,6 @@ def retrieve_details_window():
                 print("Key received2:", priv_key_pem_afterABAC_check)
                 # retrieve patients details based on email and diagnosis from blockchain
                 hash_list = retrieve_health_record(email, diagnosis)
-                print("hash list:", hash_list)
                 # after that get the hash of the data and then get the data from IPFS (request patients private key)
                 for hash in hash_list:
                     encrypted_data_str= retrieve_data_from_IPFS(hash)
@@ -1243,12 +1228,10 @@ def retrieve_health_record(email, diagnosistype):
     if email:
         encrypted_records = []
         retrieved_block = chain.retrieveBlock(email)
-        print("retrieved block:", retrieved_block)
         for json_record in retrieved_block:
             encrypted_record = json.loads(json_record)
             if str(encrypted_record['diagnosis_type']) == diagnosistype:
                 encrypted_records.append(encrypted_record['hash'])
-            print("encrypted records:", encrypted_records)
         return encrypted_records
         
 
