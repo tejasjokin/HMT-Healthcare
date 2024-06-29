@@ -1099,8 +1099,8 @@ def input_abe_key_for_decryption(decrypted_data, doctor_id):
     abe_decryption = tk.Toplevel(root)
     abe_decryption.title("Please provide your ABE key")
     
-    tk.Label(reg_window, text="Doctor's ABE Key").pack(pady=5)
-    doctor_abe_key_entry = tk.Entry(reg_window)
+    tk.Label(abe_decryption, text="Doctor's ABE Key").pack(pady=5)
+    doctor_abe_key_entry = tk.Entry(abe_decryption)
     doctor_abe_key_entry.pack(pady=5)
     
     def GatherDoctorForDecryption(decrypted_data, doctor_id):
@@ -1129,9 +1129,10 @@ def input_abe_key_for_decryption(decrypted_data, doctor_id):
             data = data + f"\n{attribute_name}: {decrypt_message}"
         del decrypted_data['SensitiveData']
         messagebox.showinfo("Patient Details", data)
+        print("Decrypted data:", data)
         abe_decryption.destroy()
                
-    submit_button = tk.Button(reg_window, text="Submit", command=lambda: GatherDoctorForDecryption(decrypted_data, doctor_id))
+    submit_button = tk.Button(abe_decryption, text="Submit", command=lambda: GatherDoctorForDecryption(decrypted_data, doctor_id))
     submit_button.pack(pady=20)
     
     
@@ -1147,14 +1148,13 @@ def decrypt_sensitive_data(decrypted_data, doctor_id):
     selection = ttk.Combobox(reg_window, values=options)
     selection.pack(pady=5)
     
-    def handle_selection(reg_window):
+    def handle_selection():
         if selection.get() == "Yes":
             input_abe_key_for_decryption(decrypted_data, doctor_id)
         else:
             messagebox.showinfo("Patient Details", decrypted_data)
-            reg_window.destroy()
     
-    submit_button = tk.Button(reg_window, text="Submit", command=handle_selection(reg_window))
+    submit_button = tk.Button(reg_window, text="Submit", command=handle_selection)
     submit_button.pack(pady=20)
 
 def retrieve_details_window():
