@@ -1113,6 +1113,16 @@ def input_abe_key_for_decryption(decrypted_data, doctor_id):
     def GatherDoctorForDecryption(decrypted_data, doctor_id):
         abe_secret_key = doctor_abe_key_entry.get()
         sk = base64.b64decode(abe_secret_key)
+        data = ''
+        data = data + f"Patient ID: {decrypted_data['Patient ID']}"
+        data = data + f"\nData: {decrypted_data["Date"]}"
+        data = data + f"\nAge: {decrypted_data["Age"]}"
+        data = data + f"\nHeart Rate: {decrypted_data["Heart Rate"]}"
+        data = data + f"\nBlood Pressure: {decrypted_data["Blood Pressure"]}"
+        data = data + f"\nWeight: {decrypted_data["Weight"]}"
+        data = data + f"\nHeight: {decrypted_data["Height"]}"
+        data = data + f"\nDiagnosis Type: {decrypted_data["Diagnosis Type"]}"
+        data = data + f"\nMedicines: {decrypted_data["Diagnosis Type"]}"
         sensitiveData = decrypted_data['SensitiveData']
         for sensitive_entry in sensitiveData:
             cipher = sensitive_entry['ciphertext'].decode()
@@ -1122,8 +1132,9 @@ def input_abe_key_for_decryption(decrypted_data, doctor_id):
             decrypt_message = decrypt(sk, cipher, attributes_list, tag)
             attribute_name = sensitive_entry['attribute_name']
             decrypted_data[attribute_name] = decrypt_message
+            data = data + f"\n{attribute_name}: {decrypt_message}"
         del decrypted_data['SensitiveData']
-        messagebox.showinfo("Patient Details", decrypted_data)
+        messagebox.showinfo("Patient Details", data)
         abe_decryption.destroy()
                
     submit_button = tk.Button(reg_window, text="Submit", command=lambda: GatherDoctorForDecryption(decrypted_data, doctor_id))
@@ -1142,14 +1153,14 @@ def decrypt_sensitive_data(decrypted_data, doctor_id):
     selection = ttk.Combobox(reg_window, values=options)
     selection.pack(pady=5)
     
-    def handle_selection():
+    def handle_selection(reg_window):
         if selection.get() == "Yes":
             input_abe_key_for_decryption(decrypted_data, doctor_id)
         else:
             messagebox.showinfo("Patient Details", decrypted_data)
             reg_window.destroy()
     
-    submit_button = tk.Button(reg_window, text="Submit", command=handle_selection)
+    submit_button = tk.Button(reg_window, text="Submit", command=handle_selection(reg_window))
     submit_button.pack(pady=20)
 
 def retrieve_details_window():
