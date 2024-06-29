@@ -1142,11 +1142,15 @@ def decrypt_sensitive_data(decrypted_data, doctor_id):
     selection = ttk.Combobox(reg_window, values=options)
     selection.pack(pady=5)
     
-    if selection.get() == "Yes":
-        input_abe_key_for_decryption(decrypted_data, doctor_id)
-    else:
-        messagebox.showinfo("Patient Details", decrypted_data)
-        reg_window.destroy()
+    def handle_selection():
+        if selection.get() == "Yes":
+            input_abe_key_for_decryption(decrypted_data, doctor_id)
+        else:
+            messagebox.showinfo("Patient Details", decrypted_data)
+            reg_window.destroy()
+    
+    submit_button = tk.Button(reg_window, text="Submit", command=handle_selection)
+    submit_button.pack(pady=20)
 
 def retrieve_details_window():
     # Create a new window for retrieving details
@@ -1228,10 +1232,11 @@ def retrieve_health_record(email, diagnosistype):
     if email:
         encrypted_records = []
         retrieved_block = chain.retrieveBlock(email)
-        for json_record in retrieved_block:
-            encrypted_record = json.loads(json_record)
-            if str(encrypted_record['diagnosis_type']) == diagnosistype:
-                encrypted_records.append(encrypted_record['hash'])
+        if retrieved_block is not None and len(retrieved_block) > 0:
+            for json_record in retrieved_block:
+                encrypted_record = json.loads(json_record)
+                if str(encrypted_record['diagnosis_type']) == diagnosistype:
+                    encrypted_records.append(encrypted_record['hash'])
         return encrypted_records
         
 
