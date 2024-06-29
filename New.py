@@ -1119,8 +1119,8 @@ def input_abe_key_for_decryption(decrypted_data, doctor_id):
         sensitiveData = decrypted_data['SensitiveData']
         
         for sensitive_entry in sensitiveData:
-            cipher = sensitive_entry['ciphertext'].decode()
-            tag = sensitive_entry['tag'].decode()
+            cipher = base64.b64decode(sensitive_entry['ciphertext'])
+            tag = base64.b64decode(sensitive_entry['tag'])
             doctor_data = retrieve_doctor_details(doctor_id)
             attributes_list = [doctor_data['decrypt_sensitive_data'], doctor_data['organization']]
             decrypt_message = decrypt(sk, cipher, attributes_list, tag)
