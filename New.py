@@ -470,20 +470,38 @@ def upload_record_to_IPFS(data, hash):
             CREATE TABLE IF NOT EXISTS health_records (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 hash TEXT,
-                data TEXT
+                ipfshash TEXT
             )
         """)
 
         # Insert health_records info into table
         sql = """
-            INSERT INTO health_records (hash,data)
+            INSERT INTO health_records (hash,ipfshash)
             VALUES (%s, %s)
         """
-        values = (hash, data)
-        cursor.execute(sql, values)
 
-        # Commit changes
-        db_connection.commit()
+        # Make POST request to API
+        response = requests.post('http://localhost:3000/upload', json={"data": data})
+        
+        if response.status_code == 200:
+            # Parse JSON response
+            response_data = response.json()
+            ipfshash = response_data.get('IpfsHash', '')
+            values = (hash, ipfshash)
+
+            # Execute SQL query
+            cursor.execute(sql, values)
+
+            # Commit changes
+            db_connection.commit()
+
+            print("Health records information stored successfully!")
+            # Show success message (assuming this is a GUI application)
+            messagebox.showinfo("Success", "Health records information stored successfully!")
+        else:
+            print(f"Failed to upload record to IPFS: {response.status_code}")
+            # Show error message (assuming this is a GUI application)
+            messagebox.showerror("API Error", "Failed to upload record to IPFS.")
 
         # Close cursor and connection
         cursor.close()
@@ -1058,12 +1076,26 @@ def retrieve_data_from_IPFS(hash):
     try:
         cursor = db_connection.cursor()
 
-        cursor.execute("SELECT data FROM health_records WHERE hash = %s", (hash,))
+        cursor.execute("SELECT ipfshash FROM health_records WHERE hash = %s", (hash,))
         result = cursor.fetchone()
         if result:
-            data = result[0] 
+            data = result[0]
             cursor.close()
             db_connection.close()
+
+            # Make POST request to API
+            response = requests.post('http://localhost:3000/retrieve', json={"hash": data})
+
+            if response.status_code == 200:
+                # Parse JSON response
+                response_data = response.json()
+                encrypted_health_record = response_data.get('data', '')
+                return encrypted_health_record
+            else:
+                print(f"Failed to retrieve record from IPFS: {response.status_code}")
+                # Show error message (assuming this is a GUI application)
+                messagebox.showerror("API Error", "Failed to retrieve record to IPFS.")   
+
             return data
         else:
             print(f"No data found for hash: {hash}")
@@ -1203,9 +1235,8 @@ def retrieve_details_window():
                 # after that get the hash of the data and then get the data from IPFS (request patients private key)
                 for hash in hash_list:
                     encrypted_data_str= retrieve_data_from_IPFS(hash)
-                    encrypted_data =json.loads(encrypted_data_str)
-                    print("encrypted data:", encrypted_data)
-                    decrypted_data = decrypt_data(priv_key_pem_afterABAC_check, encrypted_data)
+                    print("encrypted data:", encrypted_data_str)
+                    decrypted_data = decrypt_data(priv_key_pem_afterABAC_check, encrypted_data_str)
                     print("Decrypted data:", decrypted_data)
                     display_type= authorization_check(doctor_id, level)
                     print("Display Type:", display_type)
