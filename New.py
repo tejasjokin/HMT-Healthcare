@@ -27,6 +27,7 @@ from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 from abe import genEncryptionKey, encrypt, decrypt
 from cryptoHelper import sign_data, verify_signature, encrypt_data, decrypt_data
+from emailHelper import send_email
 import base64
 import socketio
 import json
@@ -360,54 +361,57 @@ def generate_otp():
 # Function to send OTP via email
 def send_otp_gmail(email, otp):
     # Gmail configuration
-    sender_email = "harshikasmishra@gmail.com"  # Replace with your Gmail address
-    sender_password = "sknjpguskvhjaxtl"  # Replace with your Gmail password
+    # sender_email = "harshikasmishra@gmail.com"  # Replace with your Gmail address
+    # sender_password = "sknjpguskvhjaxtl"  # Replace with your Gmail password
 
-    # Create message container
-    msg = MIMEMultipart()
-    msg['From'] = sender_email
-    msg['To'] = email
-    msg['Subject'] = "Your OTP for Two-Factor Authentication"
+    # # Create message container
+    # msg = MIMEMultipart()
+    # msg['From'] = sender_email
+    # msg['To'] = email
+    # msg['Subject'] = "Your OTP for Two-Factor Authentication"
 
-    # Email body
-    body = f"Your OTP (One-Time Password) is: {otp}"
-    msg.attach(MIMEText(body, 'plain'))
+    # # Email body
+    # body = f"Your OTP (One-Time Password) is: {otp}"
+    # msg.attach(MIMEText(body, 'plain'))
 
     # Send email
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()  # Secure the connection
-        server.login(sender_email, sender_password)
-        server.sendmail(sender_email, email, msg.as_string())
-        server.quit()
+        # server = smtplib.SMTP('smtp.gmail.com', 587)
+        # server.starttls()  # Secure the connection
+        # server.login(sender_email, sender_password)
+        # server.sendmail(sender_email, email, msg.as_string())
+        # server.quit()s
+        body = f"Your OTP (One-Time Password) is: {otp}"
+        send_email(email, body, "Your OTP for Two-Factor Authentication")
         print("OTP sent successfully via Gmail!")
         return True
     except Exception as e:
         print(f"Error sending email: {e}")
         return False
 
-
 def send_consent_gmail(email, doctor_id, date, link):
-    sender_email = "harshikasmishra@gmail.com"  # Replace with your Gmail address
-    sender_password = "sknjpguskvhjaxtl"  # Replace with your Gmail password
+    # sender_email = "harshikasmishra@gmail.com"  # Replace with your Gmail address
+    # sender_password = "sknjpguskvhjaxtl"  # Replace with your Gmail password
 
-    # Create message container
-    msg = MIMEMultipart()
-    msg['From'] = sender_email
-    msg['To'] = email
-    msg['Subject'] = "Request for Consent"
+    # # Create message container
+    # msg = MIMEMultipart()
+    # msg['From'] = sender_email
+    # msg['To'] = email
+    # msg['Subject'] = "Request for Consent"
 
-    # Email body
-    body = f"The doctor with ID {doctor_id} has requested your consent for a medical procedure on {date}. Please visit {link} to provide the consent "
-    msg.attach(MIMEText(body, 'plain'))
+    # # Email body
+    # body = f"The doctor with ID {doctor_id} has requested your consent for a medical procedure on {date}. Please visit {link} to provide the consent "
+    # msg.attach(MIMEText(body, 'plain'))
 
     # Send email
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()  # Secure the connection
-        server.login(sender_email, sender_password)
-        server.sendmail(sender_email, email, msg.as_string())
-        server.quit()
+        # server = smtplib.SMTP('smtp.gmail.com', 587)
+        # server.starttls()  # Secure the connection
+        # server.login(sender_email, sender_password)
+        # server.sendmail(sender_email, email, msg.as_string())
+        # server.quit()
+        body = f"The doctor with ID {doctor_id} has requested your consent for a medical procedure on {date}. Please visit {link} to provide the consent "
+        send_email(email, body, "Request for Consent")
         print("Consent request sent successfully via Gmail!")
         return True
     except Exception as e:
